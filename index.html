@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portal - Sistem Informasi Jadwal Akademik</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <style>
+    body {
+      background: linear-gradient(135deg, #198754 0%, #0d6efd 100%);
+      min-height: 100vh;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    .portal-wrapper {
+      max-width: 880px;
+      margin: 0 auto;
+      padding: 24px 16px 40px;
+    }
+    .portal-card {
+      border: none;
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+    }
+    .konteks-item {
+      border: 1px solid #e2e6ea;
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: 0.15s;
+      background: #fff;
+    }
+    .konteks-item:hover {
+      border-color: #198754;
+      box-shadow: 0 2px 8px rgba(25,135,84,0.15);
+    }
+    #loadingOverlay {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(255,255,255,0.85);
+      z-index: 9999;
+      display: none;
+      justify-content: center;
+      align-items: center;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="loadingOverlay">
+    <div class="text-center">
+      <div class="spinner-border text-success" role="status" style="width: 3rem; height: 3rem;"></div>
+      <h5 class="mt-3 text-secondary" id="loadingText">Memproses...</h5>
+    </div>
+  </div>
+
+  <div class="portal-wrapper">
+    <div class="d-flex justify-content-end pt-3">
+      <div class="text-white small text-end">
+        <span id="adminEmail" class="me-2"><i class="fa fa-user-circle me-1"></i></span>
+        <a href="#" class="text-white text-decoration-underline" onclick="logoutAdmin(); return false;">Keluar</a>
+      </div>
+    </div>
+
+    <div class="text-center text-white mb-4">
+      <h2 class="fw-bold mb-1"><i class="fa fa-graduation-cap me-2"></i>Portal Jadwal Akademik</h2>
+      <p class="mb-0">Pilih Tahun Ajaran & Program Studi untuk mulai mengelola jadwal</p>
+    </div>
+
+    <div class="card portal-card mb-3">
+      <div class="card-body p-4">
+        <h5 class="fw-bold mb-3"><i class="fa fa-list me-2 text-success"></i>Tahun Ajaran & Program Studi Tersedia</h5>
+        <div id="alertBox" class="alert d-none" role="alert"></div>
+        <div id="konteksList">
+          <div class="text-center text-muted py-3">Memuat daftar...</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card portal-card">
+      <div class="card-body p-4">
+        <h5 class="fw-bold mb-3"><i class="fa fa-plus-circle me-2 text-primary"></i>Buat Tahun Ajaran / Program Studi Baru</h5>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label fw-bold">Tahun Ajaran *</label>
+            <input type="text" id="inputTahunAjaran" class="form-control" placeholder="Contoh: Ganjil 2026/2027" list="tahunAjaranOptions">
+            <datalist id="tahunAjaranOptions"></datalist>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-bold">Nama Program Studi *</label>
+            <input type="text" id="inputProdi" class="form-control" placeholder="Contoh: Sistem Informasi">
+          </div>
+        </div>
+        <div class="text-end mt-3">
+          <button class="btn btn-primary" onclick="buatKonteksBaru()">
+            <i class="fa fa-plus me-1"></i> Buat & Buka
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script>
+    let daftarKonteks = [];
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      const session = await wajibLogin(); // redirect ke login.html jika belum login
+      if (!session) return;
+      document.getElementById('adminEmail').innerHTML =
+        `<i class="fa fa-user-circle me-1"></i> ${session.user.email}`;
+      loadKonteksList();
+    });
+
+    function showLoader(text) {
+      document.getElementById('loadingText').innerText = text || 'Memproses...';
+      document.getElementById('loadingOverlay').style.display = 'flex';
+    }
+    function hideLoader() {
+      document.getElementById('loadingOverlay').style.display = 'none';
+    }
+    function showAlert(message, type) {
+      const box = document.getElementById('alertBox');
+      box.className = `alert alert-${type || 'danger'}`;
+      box.innerText = message;
+      box.classList.remove('d-none');
+    }
+
+    function loadKonteksList() {
+      apiCall()
+        .withSuccessHandler(res => {
+          if (res.success) {
+            daftarKonteks = res.data;
+            renderKonteksList();
+            renderTahunAjaranOptions();
+          } else {
+            showAlert('Gagal memuat daftar: ' + res.error, 'danger');
+          }
+        })
+        .withFailureHandler(err => showAlert('Terjadi kesalahan koneksi: ' + err, 'danger'))
+        .getKonteksList();
+    }
+
+    function renderTahunAjaranOptions() {
+      const datalist = document.getElementById('tahunAjaranOptions');
+      const unik = [...new Set(daftarKonteks.map(k => k.tahunAjaran))];
+      datalist.innerHTML = unik.map(t => `<option value="${t}">`).join('');
+    }
+
+    function renderKonteksList() {
+      const container = document.getElementById('konteksList');
+      if (!daftarKonteks.length) {
+        container.innerHTML = `<div class="text-center text-muted py-3">Belum ada Tahun Ajaran / Program Studi. Silakan buat di bawah ini.</div>`;
+        return;
+      }
+
+      // Kelompokkan berdasarkan Tahun Ajaran
+      const grouped = {};
+      daftarKonteks.forEach(k => {
+        if (!grouped[k.tahunAjaran]) grouped[k.tahunAjaran] = [];
+        grouped[k.tahunAjaran].push(k);
+      });
+
+      let html = '';
+      Object.keys(grouped).forEach(tahun => {
+        html += `<h6 class="text-muted mt-2 mb-2">${tahun}</h6>`;
+        grouped[tahun].forEach(k => {
+          html += `
+            <div class="konteks-item">
+              <div>
+                <div class="fw-bold"><i class="fa fa-building-columns me-2 text-success"></i>${k.prodi}</div>
+                <small class="text-muted">${k.tahunAjaran}</small>
+              </div>
+              <div class="d-flex gap-2">
+                <button class="btn btn-success btn-sm" onclick="bukaKonteks('${k.id}')">
+                  Buka <i class="fa fa-arrow-right ms-1"></i>
+                </button>
+                <button class="btn btn-outline-danger btn-sm" onclick="hapusKonteks('${k.id}', '${k.prodi.replace(/'/g, "\\'")}', '${k.tahunAjaran.replace(/'/g, "\\'")}')" title="Hapus Tahun Ajaran / Prodi ini">
+                  <i class="fa fa-trash"></i>
+                </button>
+              </div>
+            </div>`;
+        });
+      });
+      container.innerHTML = html;
+    }
+
+    function bukaKonteks(id) {
+      window.location.href = 'jadwal.html?context=' + encodeURIComponent(id);
+    }
+
+    function hapusKonteks(id, prodi, tahunAjaran) {
+      const konfirmasi = confirm(
+        `PERINGATAN!\n\nAnda akan menghapus:\nProgram Studi: ${prodi}\nTahun Ajaran: ${tahunAjaran}\n\n` +
+        `Seluruh data master (dosen, mata kuliah, jam, kelas, ruangan) dan jadwal milik Prodi & Tahun Ajaran ini akan DIHAPUS PERMANEN dan tidak dapat dikembalikan.\n\n` +
+        `Lanjutkan hapus?`
+      );
+      if (!konfirmasi) return;
+
+      showLoader('Menghapus data...');
+      apiCall()
+        .withSuccessHandler(res => {
+          hideLoader();
+          if (res.success) {
+            showAlert(res.message, 'success');
+            loadKonteksList();
+          } else {
+            showAlert(res.error, 'danger');
+          }
+        })
+        .withFailureHandler(err => {
+          hideLoader();
+          showAlert('Terjadi kesalahan koneksi: ' + err, 'danger');
+        })
+        .deleteKonteks(id);
+    }
+
+    function buatKonteksBaru() {
+      const tahunAjaran = document.getElementById('inputTahunAjaran').value.trim();
+      const prodi = document.getElementById('inputProdi').value.trim();
+
+      if (!tahunAjaran || !prodi) {
+        showAlert('Tahun Ajaran dan Program Studi wajib diisi.', 'warning');
+        return;
+      }
+
+      showLoader('Membuat Program Studi baru...');
+      apiCall()
+        .withSuccessHandler(res => {
+          hideLoader();
+          if (res.success) {
+            document.getElementById('inputTahunAjaran').value = '';
+            document.getElementById('inputProdi').value = '';
+            tampilkanTombolBukaSetelahBuat(res.data);
+            loadKonteksList();
+          } else {
+            showAlert(res.error, 'danger');
+          }
+        })
+        .withFailureHandler(err => {
+          hideLoader();
+          showAlert('Terjadi kesalahan koneksi: ' + err, 'danger');
+        })
+        .createNewKonteks(tahunAjaran, prodi);
+    }
+
+    function tampilkanTombolBukaSetelahBuat(data) {
+      const box = document.getElementById('alertBox');
+      box.className = 'alert alert-success d-flex justify-content-between align-items-center flex-wrap gap-2';
+      box.innerHTML = `
+        <span><i class="fa fa-check-circle me-1"></i> "${data.prodi}" (${data.tahunAjaran}) berhasil dibuat.</span>
+        <button class="btn btn-success btn-sm" onclick="bukaKonteks('${data.id}')">
+          Buka Sekarang <i class="fa fa-arrow-right ms-1"></i>
+        </button>
+      `;
+      box.classList.remove('d-none');
+    }
+  </script>
+</body>
+</html>
