@@ -144,7 +144,7 @@ window.__api = {
     }
   },
 
-  async createNewKonteks(tahunAjaran, prodi, sourceKonteksId) {
+  async createNewKonteks(tahunAjaran, prodi, sourceKonteksId, salinJadwalJuga) {
     try {
       tahunAjaran = String(tahunAjaran || '').trim();
       prodi = String(prodi || '').trim();
@@ -165,11 +165,13 @@ window.__api = {
 
       let pesanTambahan = '';
       if (sourceKonteksId) {
-        const salin = await this.salinDataMaster(sourceKonteksId, data.id);
+        const salin = await this.salinDataMaster(sourceKonteksId, data.id, !!salinJadwalJuga);
         if (!salin.success) {
-          pesanTambahan = ` (Konteks berhasil dibuat, tapi salin Data Master gagal: ${salin.error})`;
+          pesanTambahan = ` (Konteks berhasil dibuat, tapi salin data gagal: ${salin.error})`;
+        } else if (salinJadwalJuga) {
+          pesanTambahan = ' Data Master & Jadwal berhasil disalin dari konteks sebelumnya.';
         } else {
-          pesanTambahan = ' Data Master (Dosen, Mata Kuliah, Jam, Kelas, Ruangan) berhasil disalin dari konteks sebelumnya — Jadwal dibiarkan kosong.';
+          pesanTambahan = ' Data Master berhasil disalin dari konteks sebelumnya — Jadwal dibiarkan kosong.';
         }
       }
 
@@ -185,9 +187,9 @@ window.__api = {
 
   /**
    * Menyalin Data Master (dosen, mata_kuliah, jam, kelas, ruangan) dari satu
-   * konteks ke konteks lain. Jadwal SENGAJA TIDAK ikut disalin.
+   * konteks ke konteks lain. Kalau salinJadwalJuga = true, tabel jadwal ikut disalin.
    */
-  async salinDataMaster(sourceKonteksId, targetKonteksId) {
+  async salinDataMaster(sourceKonteksId, targetKonteksId, salinJadwalJuga) {
     try {
       const tabelDanKolom = {
         dosen: ['nama'],
@@ -205,6 +207,18 @@ window.__api = {
           const insertRows = rows.map(r => ({ ...r, konteks_id: targetKonteksId }));
           const { error: insErr } = await sb.from(table).insert(insertRows);
           if (insErr) throw insErr;
+        }
+      }
+
+      if (salinJadwalJuga) {
+        const kolomJadwal = ['semester', 'hari', 'jam_mulai', 'jam_selesai', 'kode_mk', 'nama_mk', 'sks', 'dosen', 'kelas', 'ruangan', 'status', 'keterangan'];
+        const { data: rowsJadwal, error: selErr } = await sb.from('jadwal').select(kolomJadwal.join(','))
+          .eq('konteks_id', sourceKonteksId);
+        if (selErr) throw selErr;
+        if (rowsJadwal && rowsJadwal.length > 0) {
+          const insertJadwal = rowsJadwal.map(r => ({ ...r, konteks_id: targetKonteksId }));
+          const { error: insErrJadwal } = await sb.from('jadwal').insert(insertJadwal);
+          if (insErrJadwal) throw insErrJadwal;
         }
       }
 
