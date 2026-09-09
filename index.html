@@ -3,261 +3,1739 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Portal - Sistem Informasi Jadwal Akademik</title>
+  <title>Sistem Informasi Jadwal Akademik</title>
+  <!-- Bootstrap 5 CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- FontAwesome Icons -->
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
   <style>
     body {
-      background: linear-gradient(135deg, #198754 0%, #0d6efd 100%);
-      min-height: 100vh;
+      background-color: #f4f6f9;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
-    .portal-wrapper {
-      max-width: 880px;
-      margin: 0 auto;
-      padding: 24px 16px 40px;
-    }
-    .portal-card {
+    .card-stat {
       border: none;
-      border-radius: 16px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.15);
-    }
-    .konteks-item {
-      border: 1px solid #e2e6ea;
       border-radius: 10px;
-      padding: 14px 16px;
-      margin-bottom: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      transition: 0.15s;
-      background: #fff;
+      color: white;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
-    .konteks-item:hover {
-      border-color: #198754;
-      box-shadow: 0 2px 8px rgba(25,135,84,0.15);
+    .table-schedule th {
+      background-color: #198754 !important;
+      color: white;
+      text-align: center;
+      vertical-align: middle;
+    }
+    .table-schedule td {
+      vertical-align: middle;
+    }
+    option.conflict-slot {
+      color: #dc3545 !important;
+      background-color: #f8d7da !important;
+      font-weight: bold;
     }
     #loadingOverlay {
       position: fixed;
       top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(255,255,255,0.85);
+      background: rgba(255,255,255,0.8);
       z-index: 9999;
-      display: none;
+      display: flex;
       justify-content: center;
       align-items: center;
+    }
+
+    /* CSS khusus untuk Print / PDF */
+    @media print {
+      body {
+        background-color: white !important;
+      }
+      .no-print, .container > .row:first-child, .card.shadow-sm.border-0.mb-4.p-3 {
+        display: none !important;
+      }
+      .col-action, th.col-action, td.col-action {
+        display: none !important;
+      }
+      .card {
+        border: none !important;
+        box-shadow: none !important;
+      }
+      .card-header {
+        background-color: transparent !important;
+        padding-left: 0 !important;
+      }
+      .container {
+        max-width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+      }
     }
   </style>
 </head>
 <body>
 
+  <!-- Loading Overlay -->
   <div id="loadingOverlay">
     <div class="text-center">
       <div class="spinner-border text-success" role="status" style="width: 3rem; height: 3rem;"></div>
-      <h5 class="mt-3 text-secondary" id="loadingText">Memproses...</h5>
+      <h5 class="mt-3 text-secondary" id="loadingText">Memuat Data...</h5>
     </div>
   </div>
 
-  <div class="portal-wrapper">
-    <div class="d-flex justify-content-end pt-3">
-      <div class="text-white small text-end">
-        <span id="adminEmail" class="me-2"><i class="fa fa-user-circle me-1"></i></span>
-        <a href="#" class="text-white text-decoration-underline" onclick="logoutAdmin(); return false;">Keluar</a>
+  <div class="container py-4">
+
+    <!-- KOP / HEADER (selalu tampil di layar, dicetak, Word & Excel) -->
+    <div id="printHeader" class="text-center mb-3">
+      <h4 class="fw-bold mb-0">SISTEM INFORMASI JADWAL AKADEMIK</h4>
+      <h5 class="mb-0">Program Studi: <span id="printProdi">-</span></h5>
+      <h6 class="mb-0 text-muted">Tahun Ajaran: <span id="printTahunAjaran">-</span></h6>
+      <hr>
+    </div>
+
+    <!-- Info Konteks Aktif & Navigasi Portal -->
+    <div class="d-flex justify-content-between align-items-center mb-3 no-print">
+      <div class="badge bg-success-subtle text-success-emphasis border border-success-subtle px-3 py-2">
+        <i class="fa fa-building-columns me-1"></i> <span id="badgeProdi">-</span>
+        &nbsp;|&nbsp;
+        <i class="fa fa-calendar me-1"></i> <span id="badgeTahunAjaran">-</span>
       </div>
+      <button class="btn btn-outline-secondary btn-sm" onclick="kembaliKePortal()">
+        <i class="fa fa-arrow-left me-1"></i> Ganti Prodi / Tahun Ajaran
+      </button>
     </div>
 
-    <div class="text-center text-white mb-4">
-      <h2 class="fw-bold mb-1"><i class="fa fa-graduation-cap me-2"></i>Portal Jadwal Akademik</h2>
-      <p class="mb-0">Pilih Tahun Ajaran & Program Studi untuk mulai mengelola jadwal</p>
-    </div>
-
-    <div class="card portal-card mb-3">
-      <div class="card-body p-4">
-        <h5 class="fw-bold mb-3"><i class="fa fa-list me-2 text-success"></i>Tahun Ajaran & Program Studi Tersedia</h5>
-        <div id="alertBox" class="alert d-none" role="alert"></div>
-        <div id="konteksList">
-          <div class="text-center text-muted py-3">Memuat daftar...</div>
+    <!-- Header / Statistik -->
+    <div class="row g-3 mb-4">
+      <div class="col-md col-6">
+        <div class="card card-stat bg-primary p-3">
+          <small>Total Jadwal</small>
+          <h3 id="statTotalJadwal" class="fw-bold mb-0">0</h3>
+        </div>
+      </div>
+      <div class="col-md col-6">
+        <div class="card card-stat bg-success p-3">
+          <small>Jumlah Kelas</small>
+          <h3 id="statJumlahKelas" class="fw-bold mb-0">0</h3>
+        </div>
+      </div>
+      <div class="col-md col-6">
+        <div class="card card-stat bg-info p-3">
+          <small>Jumlah Dosen</small>
+          <h3 id="statJumlahDosen" class="fw-bold mb-0">0</h3>
+        </div>
+      </div>
+      <div class="col-md col-6">
+        <div class="card card-stat bg-secondary p-3">
+          <small>Jumlah Ruangan</small>
+          <h3 id="statJumlahRuangan" class="fw-bold mb-0">0</h3>
+        </div>
+      </div>
+      <div class="col-md col-6">
+        <div class="card card-stat bg-dark p-3">
+          <small>Mata Kuliah</small>
+          <h3 id="statMataKuliah" class="fw-bold mb-0">0</h3>
         </div>
       </div>
     </div>
 
-    <div class="card portal-card">
-      <div class="card-body p-4">
-        <h5 class="fw-bold mb-3"><i class="fa fa-plus-circle me-2 text-primary"></i>Buat Tahun Ajaran / Program Studi Baru</h5>
-        <div class="row g-3">
-          <div class="col-md-6">
-            <label class="form-label fw-bold">Tahun Ajaran *</label>
-            <input type="text" id="inputTahunAjaran" class="form-control" placeholder="Contoh: Ganjil 2026/2027" list="tahunAjaranOptions">
-            <datalist id="tahunAjaranOptions"></datalist>
-          </div>
-          <div class="col-md-6">
-            <label class="form-label fw-bold">Nama Program Studi *</label>
-            <input type="text" id="inputProdi" class="form-control" placeholder="Contoh: Sistem Informasi">
-          </div>
-        </div>
-        <div class="text-end mt-3">
-          <button class="btn btn-primary" onclick="buatKonteksBaru()">
-            <i class="fa fa-plus me-1"></i> Buat & Buka
+    <!-- Toolbar Filter & Aksi -->
+    <div class="card shadow-sm border-0 mb-4 p-3">
+      <div class="row g-2 align-items-center">
+        <div class="col-md-auto">
+          <button class="btn btn-primary w-100" onclick="openAddScheduleModal()">
+            <i class="fa fa-plus me-1"></i> Tambah Jadwal
           </button>
         </div>
+        <div class="col-md">
+          <div class="row g-2">
+            <div class="col-md-2">
+              <select id="filterSemester" class="form-select form-select-sm" onchange="filterSchedules()">
+                <option value="">-- Semua Semes --</option>
+                <option value="Semester 1">Semester 1</option>
+                <option value="Semester 2">Semester 2</option>
+                <option value="Semester 3">Semester 3</option>
+                <option value="Semester 4">Semester 4</option>
+                <option value="Semester 5">Semester 5</option>
+                <option value="Semester 6">Semester 6</option>
+                <option value="Semester 7">Semester 7</option>
+                <option value="Semester 8">Semester 8</option>
+              </select>
+            </div>
+            <div class="col-md-2">
+              <select id="filterKelas" class="form-select form-select-sm" onchange="filterSchedules()">
+                <option value="">-- Semua Kelas --</option>
+              </select>
+            </div>
+            <div class="col-md-2">
+              <select id="filterDosen" class="form-select form-select-sm" onchange="filterSchedules()">
+                <option value="">-- Semua Dosen --</option>
+              </select>
+            </div>
+            <div class="col-md-2">
+              <select id="filterHari" class="form-select form-select-sm" onchange="filterSchedules()">
+                <option value="">-- Semua Hari --</option>
+                <option value="Senin">Senin</option>
+                <option value="Selasa">Selasa</option>
+                <option value="Rabu">Rabu</option>
+                <option value="Kamis">Kamis</option>
+                <option value="Jumat">Jumat</option>
+                <option value="Sabtu">Sabtu</option>
+              </select>
+            </div>
+            <div class="col-md-2">
+              <select id="filterRuangan" class="form-select form-select-sm" onchange="filterSchedules()">
+                <option value="">-- Semua Ruang --</option>
+              </select>
+            </div>
+            <div class="col-md-2">
+              <button class="btn btn-outline-secondary btn-sm w-100" onclick="resetFilter()">Reset Filter</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tombol Aksi & Export -->
+      <div class="row mt-3 align-items-center">
+        <div class="col-md-8">
+          <button class="btn btn-outline-success btn-sm me-1 mb-1" onclick="exportToExcel()"><i class="fa fa-file-excel me-1"></i> Export Excel</button>
+          <button class="btn btn-outline-primary btn-sm me-1 mb-1" onclick="exportToWord()"><i class="fa fa-file-word me-1"></i> Export Word</button>
+          <button class="btn btn-outline-danger btn-sm me-1 mb-1" onclick="exportToPDF()"><i class="fa fa-file-pdf me-1"></i> Cetak PDF / Print</button>
+          <button class="btn btn-outline-info btn-sm mb-1 text-dark" onclick="openDosenSksReport()"><i class="fa fa-chart-bar me-1"></i> Laporan SKS Dosen</button>
+        </div>
+        <div class="col-md-4 text-end">
+          <button class="btn btn-outline-success btn-sm me-2 mb-1" onclick="openKelasKosongModal()"><i class="fa fa-calendar-check me-1"></i> Cek Kelas Kosong</button>
+          <button class="btn btn-outline-dark btn-sm mb-1" onclick="openMasterManager()"><i class="fa fa-database me-1"></i> Kelola Data Master</button>
+        </div>
+      </div>
+
+      <!-- Menu Pencarian -->
+      <div class="row mt-2">
+        <div class="col-12">
+          <div class="input-group">
+            <span class="input-group-text bg-white"><i class="fa fa-search text-muted"></i></span>
+            <input type="text" id="searchInput" class="form-control" placeholder="Cari Mata Kuliah, Kode, Dosen, Kelas, atau Ruangan..." onkeyup="filterSchedules()">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Kontainer Tabel Jadwal per Kelas/Group -->
+    <div id="scheduleContainer"></div>
+
+    <!-- Laporan Total SKS & Beban Mengajar Dosen (Otomatis, real-time) -->
+    <div id="laporanSksContainer" class="mt-2"></div>
+  </div>
+
+  <!-- MODAL TAMBAH/EDIT JADWAL -->
+  <div class="modal fade" id="scheduleModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header bg-primary text-white">
+          <h5 class="modal-title" id="scheduleModalTitle">Tambah Jadwal Kuliah</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="schedId">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label fw-bold">Semester *</label>
+              <select id="schedSemester" class="form-select" onchange="onSemesterChange()">
+                <option value="">Pilih Semester</option>
+                <option value="Semester 1">Semester 1</option>
+                <option value="Semester 2">Semester 2</option>
+                <option value="Semester 3">Semester 3</option>
+                <option value="Semester 4">Semester 4</option>
+                <option value="Semester 5">Semester 5</option>
+                <option value="Semester 6">Semester 6</option>
+                <option value="Semester 7">Semester 7</option>
+                <option value="Semester 8">Semester 8</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-bold">Mata Kuliah *</label>
+              <select id="schedMataKuliah" class="form-select" onchange="onMataKuliahChange()">
+                <option value="">Pilih Mata Kuliah</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Kode MK</label>
+              <input type="text" id="schedKodeMk" class="form-control" readonly>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">SKS</label>
+              <input type="text" id="schedSks" class="form-control" readonly>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-bold">Dosen Pengampu *</label>
+              <select id="schedDosen" class="form-select">
+                <option value="">Pilih Dosen</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-bold">Hari *</label>
+              <select id="schedHari" class="form-select">
+                <option value="">Pilih Hari</option>
+                <option value="Senin">Senin</option>
+                <option value="Selasa">Selasa</option>
+                <option value="Rabu">Rabu</option>
+                <option value="Kamis">Kamis</option>
+                <option value="Jumat">Jumat</option>
+                <option value="Sabtu">Sabtu</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-bold">Jam Kuliah Master *</label>
+              <select id="schedJamMaster" class="form-select" onchange="onJamMasterChange()">
+                <option value="">-- Pilih Jam Master --</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Jam Mulai</label>
+              <input type="text" id="schedJamMulai" class="form-control" placeholder="--:--" readonly>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Jam Selesai</label>
+              <input type="text" id="schedJamSelesai" class="form-control" placeholder="--:--" readonly>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-bold">Kelas *</label>
+              <select id="schedKelas" class="form-select">
+                <option value="">Pilih Kelas</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-bold">Ruangan *</label>
+              <select id="schedRuangan" class="form-select">
+                <option value="">Pilih Ruangan</option>
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Keterangan Tambahan</label>
+              <input type="text" id="schedKeterangan" class="form-control" placeholder="Opsional">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+          <button type="button" class="btn btn-primary" onclick="saveSchedule()">Simpan Jadwal</button>
+        </div>
       </div>
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-config.js"></script>
-  <script>
-    let daftarKonteks = [];
+  <!-- MODAL LAPORAN SKS DOSEN -->
+  <div class="modal fade" id="dosenSksModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+      <div class="modal-content">
+        <div class="modal-header bg-info text-dark">
+          <h5 class="modal-title fw-bold"><i class="fa fa-chart-bar me-2"></i> Laporan Total SKS & Beban Mengajar Dosen</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="table-responsive" style="max-height: 450px; overflow-y: auto;">
+            <table class="table table-bordered table-striped" id="tableDosenSks">
+              <thead class="table-dark">
+                <tr>
+                  <th width="50" class="text-center">No</th>
+                  <th>Nama Dosen</th>
+                  <th>Daftar Mata Kuliah & Kelas Diampu</th>
+                  <th width="120" class="text-center">Total SKS</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-success btn-sm" onclick="exportDosenSksExcel()"><i class="fa fa-file-excel me-1"></i> Export Excel</button>
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Tutup</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
-    document.addEventListener('DOMContentLoaded', async () => {
-      const session = await wajibLogin(); // redirect ke login.html jika belum login
-      if (!session) return;
-      document.getElementById('adminEmail').innerHTML =
-        `<i class="fa fa-user-circle me-1"></i> ${session.user.email}`;
-      loadKonteksList();
+  <!-- MODAL KELOLA MASTER DATA -->
+  <div class="modal fade" id="masterModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+      <div class="modal-content">
+        <div class="modal-header bg-dark text-white">
+          <h5 class="modal-title" id="masterModalTitle">Kelola Data Master</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="editMasterType" value="">
+          <input type="hidden" id="editMasterId" value="">
+
+          <!-- Notifikasi Alert di dalam Modal -->
+          <div id="masterAlert" class="alert alert-success alert-dismissible fade show d-none" role="alert">
+            <span id="masterAlertMsg">Berhasil!</span>
+            <button type="button" class="btn-close" onclick="document.getElementById('masterAlert').classList.add('d-none')"></button>
+          </div>
+
+          <ul class="nav nav-tabs mb-3" id="masterTab" role="tablist">
+            <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabDosen" type="button" onclick="resetMasterForm()">Dosen</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabMk" type="button" onclick="resetMasterForm()">Mata Kuliah</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabJam" type="button" onclick="resetMasterForm()">Jam Kuliah</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabKelas" type="button" onclick="resetMasterForm()">Kelas</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabRuangan" type="button" onclick="resetMasterForm()">Ruangan</button></li>
+          </ul>
+          <div class="tab-content" id="masterTabContent">
+            <!-- TAB DOSEN -->
+            <div class="tab-pane fade show active" id="tabDosen">
+              <div class="row mb-3 align-items-center">
+                <div class="col-md-4"><input type="text" id="inputMasterDosen" class="form-control form-control-sm" placeholder="Nama Dosen & Gelar"></div>
+                <div class="col-md-2">
+                  <button id="btnSubmitDosen" class="btn btn-success btn-sm w-100" onclick="saveMasterData('dosen')"><i class="fa fa-plus me-1"></i> Tambah</button>
+                </div>
+                <div class="col-md-2" id="cancelEditDosen" style="display:none;">
+                  <button class="btn btn-secondary btn-sm w-100" onclick="resetMasterForm()">Batal Edit</button>
+                </div>
+              </div>
+              <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
+                <table class="table table-bordered table-sm" id="tableMasterDosen"><thead><tr><th>Nama Dosen</th><th width="120" class="text-center">Aksi</th></tr></thead><tbody></tbody></table>
+              </div>
+            </div>
+            <!-- TAB MATA KULIAH -->
+            <div class="tab-pane fade" id="tabMk">
+              <div class="row g-2 mb-3 align-items-center">
+                <div class="col-md-2"><input type="text" id="inputMkKode" class="form-control form-control-sm" placeholder="Kode MK"></div>
+                <div class="col-md-4"><input type="text" id="inputMkNama" class="form-control form-control-sm" placeholder="Nama Mata Kuliah"></div>
+                <div class="col-md-1"><input type="number" id="inputMkSks" class="form-control form-control-sm" placeholder="SKS"></div>
+                <div class="col-md-2">
+                  <select id="inputMkSemester" class="form-select form-select-sm">
+                    <option value="">Pilih Sem</option>
+                    <option value="Semester 1">Semester 1</option>
+                    <option value="Semester 2">Semester 2</option>
+                    <option value="Semester 3">Semester 3</option>
+                    <option value="Semester 4">Semester 4</option>
+                    <option value="Semester 5">Semester 5</option>
+                    <option value="Semester 6">Semester 6</option>
+                    <option value="Semester 7">Semester 7</option>
+                    <option value="Semester 8">Semester 8</option>
+                  </select>
+                </div>
+                <div class="col-md-2">
+                  <button id="btnSubmitMk" class="btn btn-success btn-sm w-100" onclick="saveMasterData('mata_kuliah')"><i class="fa fa-plus me-1"></i> Tambah</button>
+                </div>
+                <div class="col-md-1" id="cancelEditMk" style="display:none;">
+                  <button class="btn btn-secondary btn-sm w-100" onclick="resetMasterForm()">Batal</button>
+                </div>
+              </div>
+              <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
+                <table class="table table-bordered table-sm" id="tableMasterMk"><thead><tr><th>Kode</th><th>Nama Mata Kuliah</th><th>SKS</th><th>Semester</th><th width="120" class="text-center">Aksi</th></tr></thead><tbody></tbody></table>
+              </div>
+            </div>
+            <!-- TAB JAM -->
+            <div class="tab-pane fade" id="tabJam">
+              <div class="row g-2 mb-3 align-items-center">
+                <div class="col-md-3"><input type="time" id="inputJamMulai" class="form-control form-control-sm"></div>
+                <div class="col-md-3"><input type="time" id="inputJamSelesai" class="form-control form-control-sm"></div>
+                <div class="col-md-2">
+                  <button id="btnSubmitJam" class="btn btn-success btn-sm w-100" onclick="saveMasterData('jam')"><i class="fa fa-plus me-1"></i> Tambah</button>
+                </div>
+                <div class="col-md-2" id="cancelEditJam" style="display:none;">
+                  <button class="btn btn-secondary btn-sm w-100" onclick="resetMasterForm()">Batal Edit</button>
+                </div>
+              </div>
+              <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
+                <table class="table table-bordered table-sm" id="tableMasterJam"><thead><tr><th>Jam Mulai</th><th>Jam Selesai</th><th>Label</th><th width="120" class="text-center">Aksi</th></tr></thead><tbody></tbody></table>
+              </div>
+            </div>
+            <!-- TAB KELAS -->
+            <div class="tab-pane fade" id="tabKelas">
+              <div class="row mb-3 align-items-center">
+                <div class="col-md-4"><input type="text" id="inputMasterKelas" class="form-control form-control-sm" placeholder="Nama Kelas (Contoh: 3.A)"></div>
+                <div class="col-md-2">
+                  <button id="btnSubmitKelas" class="btn btn-success btn-sm w-100" onclick="saveMasterData('kelas')"><i class="fa fa-plus me-1"></i> Tambah</button>
+                </div>
+                <div class="col-md-2" id="cancelEditKelas" style="display:none;">
+                  <button class="btn btn-secondary btn-sm w-100" onclick="resetMasterForm()">Batal Edit</button>
+                </div>
+              </div>
+              <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
+                <table class="table table-bordered table-sm" id="tableMasterKelas"><thead><tr><th>Nama Kelas</th><th width="120" class="text-center">Aksi</th></tr></thead><tbody></tbody></table>
+              </div>
+            </div>
+            <!-- TAB RUANGAN -->
+            <div class="tab-pane fade" id="tabRuangan">
+              <div class="row mb-3 align-items-center">
+                <div class="col-md-4"><input type="text" id="inputMasterRuangan" class="form-control form-control-sm" placeholder="Nama/Nomor Ruangan"></div>
+                <div class="col-md-2">
+                  <button id="btnSubmitRuangan" class="btn btn-success btn-sm w-100" onclick="saveMasterData('ruangan')"><i class="fa fa-plus me-1"></i> Tambah</button>
+                </div>
+                <div class="col-md-2" id="cancelEditRuangan" style="display:none;">
+                  <button class="btn btn-secondary btn-sm w-100" onclick="resetMasterForm()">Batal Edit</button>
+                </div>
+              </div>
+              <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
+                <table class="table table-bordered table-sm" id="tableMasterRuangan"><thead><tr><th>Nama Ruangan</th><th width="120" class="text-center">Aksi</th></tr></thead><tbody></tbody></table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL KELAS KOSONG -->
+  <div class="modal fade" id="kelasKosongModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+      <div class="modal-content">
+        <div class="modal-header bg-success text-white">
+          <h5 class="modal-title"><i class="fa fa-calendar-check me-2"></i> Cek Kelas / Ruangan / Slot Waktu Kosong</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <ul class="nav nav-tabs mb-3" id="kosongTab" role="tablist">
+            <li class="nav-item" role="presentation">
+              <button class="nav-link active" id="tab-kosong-kelas" data-bs-toggle="tab" data-bs-target="#pane-kosong-kelas" type="button" role="tab">
+                <i class="fa fa-users me-1"></i> Per Kelas
+              </button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="tab-kosong-ruangan" data-bs-toggle="tab" data-bs-target="#pane-kosong-ruangan" type="button" role="tab">
+                <i class="fa fa-door-open me-1"></i> Per Ruangan
+              </button>
+            </li>
+          </ul>
+
+          <div class="tab-content">
+            <!-- TAB: PER KELAS -->
+            <div class="tab-pane fade show active" id="pane-kosong-kelas" role="tabpanel">
+              <div class="row g-2 mb-3">
+                <div class="col-md-4">
+                  <label class="form-label fw-bold small">Pilih Kelas</label>
+                  <select id="kosongFilterKelas" class="form-select form-select-sm" onchange="renderKelasKosong()">
+                    <option value="">-- Semua Kelas --</option>
+                  </select>
+                </div>
+              </div>
+              <div id="kelasKosongContainer" style="max-height: 500px; overflow-y: auto;"></div>
+            </div>
+
+            <!-- TAB: PER RUANGAN -->
+            <div class="tab-pane fade" id="pane-kosong-ruangan" role="tabpanel">
+              <div class="row g-2 mb-3">
+                <div class="col-md-4">
+                  <label class="form-label fw-bold small">Pilih Ruangan</label>
+                  <select id="kosongFilterRuangan" class="form-select form-select-sm" onchange="renderRuanganKosong()">
+                    <option value="">-- Semua Ruangan --</option>
+                  </select>
+                </div>
+              </div>
+              <div id="ruanganKosongContainer" style="max-height: 500px; overflow-y: auto;"></div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Tutup</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL LAPORAN BENTROK -->
+  <div class="modal fade" id="laporanModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header bg-danger text-white">
+          <h5 class="modal-title"><i class="fa fa-triangle-exclamation me-2"></i> Peringatan Bentrok Jadwal</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-danger fw-bold" id="laporanPesanError">Jadwal tidak dapat disimpan karena terjadi bentrok waktu:</p>
+          <ul id="laporanDetailList" class="list-group"></ul>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Tutup & Periksa Kembali</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap JS Bundle -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    // Konteks aktif (Tahun Ajaran + Program Studi) dikirim dari server (code.gs)
+    const CONTEXT_PREFIX = "<?= contextPrefix ?>";
+    const TAHUN_AJARAN = "<?= tahunAjaran ?>";
+    const PRODI = "<?= prodi ?>";
+    const BASE_URL = "<?= baseUrl ?>";
+
+    let globalState = {
+      masters: { dosen: [], mataKuliah: [], jam: [], kelas: [], ruangan: [] },
+      schedules: []
+    };
+
+    let scheduleModalObj, masterModalObj, laporanModalObj, dosenSksModalObj, kelasKosongModalObj;
+
+    function kembaliKePortal() {
+      window.top.location.href = BASE_URL;
+    }
+
+    function terapkanInfoKonteks() {
+      document.getElementById('printProdi').innerText = PRODI;
+      document.getElementById('printTahunAjaran').innerText = TAHUN_AJARAN;
+      document.getElementById('badgeProdi').innerText = PRODI;
+      document.getElementById('badgeTahunAjaran').innerText = TAHUN_AJARAN;
+      document.title = `Jadwal Akademik - ${PRODI} - ${TAHUN_AJARAN}`;
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      terapkanInfoKonteks();
+      scheduleModalObj = new bootstrap.Modal(document.getElementById('scheduleModal'), { focus: false });
+      masterModalObj = new bootstrap.Modal(document.getElementById('masterModal'), { focus: false });
+      laporanModalObj = new bootstrap.Modal(document.getElementById('laporanModal'), { focus: false });
+      dosenSksModalObj = new bootstrap.Modal(document.getElementById('dosenSksModal'), { focus: false });
+      kelasKosongModalObj = new bootstrap.Modal(document.getElementById('kelasKosongModal'), { focus: false });
+      
+      ['schedHari', 'schedKelas', 'schedDosen', 'schedRuangan'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('change', updateJamMasterAvailability);
+      });
+
+      loadApp();
     });
 
-    function showLoader(text) {
-      document.getElementById('loadingText').innerText = text || 'Memproses...';
-      document.getElementById('loadingOverlay').style.display = 'flex';
+    function showLoader(text = 'Memuat Data...') { 
+      document.getElementById('loadingText').innerText = text;
+      document.getElementById('loadingOverlay').style.display = 'flex'; 
     }
-    function hideLoader() {
-      document.getElementById('loadingOverlay').style.display = 'none';
-    }
-    function showAlert(message, type) {
-      const box = document.getElementById('alertBox');
-      box.className = `alert alert-${type || 'danger'}`;
-      box.innerText = message;
-      box.classList.remove('d-none');
+    function hideLoader() { document.getElementById('loadingOverlay').style.display = 'none'; }
+
+    function showMasterAlert(message, type = 'success') {
+      const alertEl = document.getElementById('masterAlert');
+      const msgEl = document.getElementById('masterAlertMsg');
+      alertEl.className = `alert alert-${type} alert-dismissible fade show`;
+      msgEl.innerText = message;
+      setTimeout(() => {
+        alertEl.classList.add('d-none');
+      }, 3500);
     }
 
-    function loadKonteksList() {
-      apiCall()
+    function loadApp(silent = false) {
+      if (!silent) showLoader('Memuat Data...');
+      google.script.run
         .withSuccessHandler(res => {
+          if (!silent) hideLoader();
           if (res.success) {
-            daftarKonteks = res.data;
-            renderKonteksList();
-            renderTahunAjaranOptions();
+            globalState.masters = res.masters;
+            globalState.schedules = res.schedules;
+            populateDropdowns();
+            renderSchedules(globalState.schedules);
+            renderLaporanSks();
+            updateStats();
           } else {
-            showAlert('Gagal memuat daftar: ' + res.error, 'danger');
+            alert('Gagal memuat data: ' + res.error);
           }
         })
-        .withFailureHandler(err => showAlert('Terjadi kesalahan koneksi: ' + err, 'danger'))
-        .getKonteksList();
+        .withFailureHandler(err => {
+          if (!silent) hideLoader();
+          alert('Terjadi kesalahan koneksi: ' + err);
+        })
+        .getInitialData(CONTEXT_PREFIX);
     }
 
-    function renderTahunAjaranOptions() {
-      const datalist = document.getElementById('tahunAjaranOptions');
-      const unik = [...new Set(daftarKonteks.map(k => k.tahunAjaran))];
-      datalist.innerHTML = unik.map(t => `<option value="${t}">`).join('');
+    function populateDropdowns() {
+      fillSelect('filterKelas', globalState.masters.kelas || [], 'nama', '-- Semua Kelas --');
+      fillSelect('filterDosen', globalState.masters.dosen || [], 'nama', '-- Semua Dosen --');
+      fillSelect('filterRuangan', globalState.masters.ruangan || [], 'nama', '-- Semua Ruang --');
+
+      fillSelect('schedDosen', globalState.masters.dosen || [], 'nama', 'Pilih Dosen');
+      fillSelect('schedKelas', globalState.masters.kelas || [], 'nama', 'Pilih Kelas');
+      fillSelect('schedRuangan', globalState.masters.ruangan || [], 'nama', 'Pilih Ruangan');
+
+      onSemesterChange();
+      updateJamMasterAvailability();
     }
 
-    function renderKonteksList() {
-      const container = document.getElementById('konteksList');
-      if (!daftarKonteks.length) {
-        container.innerHTML = `<div class="text-center text-muted py-3">Belum ada Tahun Ajaran / Program Studi. Silakan buat di bawah ini.</div>`;
+    function onSemesterChange() {
+      const selectedSemester = document.getElementById('schedSemester').value;
+      const mkSelect = document.getElementById('schedMataKuliah');
+      const currentSelectedMk = mkSelect.value;
+      
+      mkSelect.innerHTML = '<option value="">Pilih Mata Kuliah</option>';
+      
+      const filteredMk = (globalState.masters.mataKuliah || []).filter(mk => {
+        if (!selectedSemester) return true;
+        return String(mk.semester).toLowerCase() === String(selectedSemester).toLowerCase();
+      });
+
+      filteredMk.forEach(mk => {
+        const opt = document.createElement('option');
+        opt.value = mk.kode;
+        opt.setAttribute('data-nama', mk.nama);
+        opt.setAttribute('data-sks', mk.sks);
+        opt.setAttribute('data-semester', mk.semester);
+        opt.text = `${mk.nama} (${mk.kode})`;
+        mkSelect.appendChild(opt);
+      });
+
+      if (currentSelectedMk) {
+        const stillExists = filteredMk.some(m => m.kode === currentSelectedMk);
+        if (stillExists) {
+          mkSelect.value = currentSelectedMk;
+        } else {
+          mkSelect.value = '';
+          document.getElementById('schedKodeMk').value = '';
+          document.getElementById('schedSks').value = '';
+        }
+      }
+    }
+
+    function fillSelect(elementId, dataArray, textKey, defaultText) {
+      const el = document.getElementById(elementId);
+      const currentVal = el.value;
+      el.innerHTML = `<option value="">${defaultText}</option>`;
+      dataArray.forEach(item => {
+        const opt = document.createElement('option');
+        opt.value = item[textKey];
+        opt.text = item[textKey];
+        el.appendChild(opt);
+      });
+      el.value = currentVal;
+    }
+
+    function updateJamMasterAvailability() {
+      const jamMasterSelect = document.getElementById('schedJamMaster');
+      if (!jamMasterSelect) return;
+
+      const selectedHari = document.getElementById('schedHari').value;
+      const selectedKelas = document.getElementById('schedKelas').value;
+      const selectedDosen = document.getElementById('schedDosen').value;
+      const selectedRuangan = document.getElementById('schedRuangan').value;
+      const currentEditId = document.getElementById('schedId').value;
+
+      jamMasterSelect.innerHTML = '<option value="">-- Pilih Jam Master --</option>';
+
+      (globalState.masters.jam || []).forEach(j => {
+        const startM = timeToMin(j.jamMulai);
+        const endM = timeToMin(j.jamSelesai);
+        let isOccupied = false;
+        let conflictReason = '';
+
+        if (selectedHari) {
+          globalState.schedules.forEach(item => {
+            if (currentEditId && item.id === currentEditId) return;
+            if (String(item.hari).toLowerCase() !== String(selectedHari).toLowerCase()) return;
+
+            const itemStart = timeToMin(item.jamMulai);
+            const itemEnd = timeToMin(item.jamSelesai);
+            const isOverlap = (startM < itemEnd && endM > itemStart);
+
+            if (isOverlap) {
+              if ((selectedKelas && item.kelas === selectedKelas) ||
+                  (selectedDosen && item.dosen === selectedDosen) ||
+                  (selectedRuangan && item.ruangan === selectedRuangan)) {
+                isOccupied = true;
+                if (selectedKelas && item.kelas === selectedKelas) conflictReason = `Kelas ${selectedKelas} Terisi`;
+                else if (selectedDosen && item.dosen === selectedDosen) conflictReason = `Dosen Sibuk`;
+                else if (selectedRuangan && item.ruangan === selectedRuangan) conflictReason = `Ruangan Penuh`;
+              }
+            }
+          });
+        }
+
+        const labelText = j.label || `${j.jamMulai} - ${j.jamSelesai}`;
+        const option = document.createElement('option');
+        option.value = `${j.jamMulai}|${j.jamSelesai}`;
+
+        if (isOccupied) {
+          option.text = `🔴 [Sudah Terisi - ${conflictReason}] ${labelText}`;
+          option.className = 'conflict-slot';
+        } else {
+          option.text = labelText;
+        }
+
+        jamMasterSelect.appendChild(option);
+      });
+    }
+
+    function timeToMin(tStr) {
+      if (!tStr) return 0;
+      const parts = String(tStr).trim().split(':');
+      if (parts.length < 2) return 0;
+      return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
+    }
+
+    function onMataKuliahChange() {
+      const select = document.getElementById('schedMataKuliah');
+      const opt = select.options[select.selectedIndex];
+      if (opt && opt.value) {
+        document.getElementById('schedKodeMk').value = opt.value;
+        document.getElementById('schedSks').value = opt.getAttribute('data-sks') || '';
+        const sem = opt.getAttribute('data-semester');
+        if (sem) {
+          document.getElementById('schedSemester').value = sem;
+          onSemesterChange();
+          select.value = opt.value;
+        }
+      } else {
+        document.getElementById('schedKodeMk').value = '';
+        document.getElementById('schedSks').value = '';
+      }
+    }
+
+    function onJamMasterChange() {
+      const val = document.getElementById('schedJamMaster').value;
+      if (val) {
+        const parts = val.split('|');
+        document.getElementById('schedJamMulai').value = parts[0];
+        document.getElementById('schedJamSelesai').value = parts[1];
+      } else {
+        document.getElementById('schedJamMulai').value = '';
+        document.getElementById('schedJamSelesai').value = '';
+      }
+    }
+
+    function updateStats() {
+      document.getElementById('statTotalJadwal').innerText = globalState.schedules.length;
+      document.getElementById('statJumlahKelas').innerText = (globalState.masters.kelas || []).length;
+      document.getElementById('statJumlahDosen').innerText = (globalState.masters.dosen || []).length;
+      document.getElementById('statJumlahRuangan').innerText = (globalState.masters.ruangan || []).length;
+      document.getElementById('statMataKuliah').innerText = (globalState.masters.mataKuliah || []).length;
+    }
+
+    function renderSchedules(dataList) {
+      const container = document.getElementById('scheduleContainer');
+      container.innerHTML = '';
+
+      if (!dataList || dataList.length === 0) {
+        container.innerHTML = `<div class="alert alert-info text-center py-4 bg-white shadow-sm border-0">Belum ada data jadwal yang tersedia.</div>`;
         return;
       }
 
-      // Kelompokkan berdasarkan Tahun Ajaran
       const grouped = {};
-      daftarKonteks.forEach(k => {
-        if (!grouped[k.tahunAjaran]) grouped[k.tahunAjaran] = [];
-        grouped[k.tahunAjaran].push(k);
+      dataList.forEach(item => {
+        const sem = item.semester || 'Tanpa Semester';
+        const cls = item.kelas || 'Tanpa Kelas';
+        const key = `${sem}___${cls}`;
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push(item);
       });
 
-      let html = '';
-      Object.keys(grouped).forEach(tahun => {
-        html += `<h6 class="text-muted mt-2 mb-2">${tahun}</h6>`;
-        grouped[tahun].forEach(k => {
-          html += `
-            <div class="konteks-item">
-              <div>
-                <div class="fw-bold"><i class="fa fa-building-columns me-2 text-success"></i>${k.prodi}</div>
-                <small class="text-muted">${k.tahunAjaran}</small>
+      const dayOrder = { 'Senin': 1, 'Selasa': 2, 'Rabu': 3, 'Kamis': 4, 'Jumat': 5, 'Sabtu': 6, 'Minggu': 7 };
+
+      Object.keys(grouped).sort().forEach(groupKey => {
+        const [semester, kelas] = groupKey.split('___');
+        const items = grouped[groupKey];
+
+        items.sort((a, b) => (dayOrder[a.hari] || 99) - (dayOrder[b.hari] || 99) || timeToMin(a.jamMulai) - timeToMin(b.jamMulai));
+
+        const totalSksKelas = items.reduce((sum, item) => sum + (Number(item.sks) || 0), 0);
+
+        let cardHtml = `
+          <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white py-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
+              <div class="d-flex align-items-baseline gap-2">
+                <h5 class="mb-0 text-success fw-bold">${semester}</h5>
+                <span class="text-muted fw-semibold" style="font-size: 1.05rem;">| Kelas : ${kelas}</span>
               </div>
-              <div class="d-flex gap-2">
-                <button class="btn btn-success btn-sm" onclick="bukaKonteks('${k.id}')">
-                  Buka <i class="fa fa-arrow-right ms-1"></i>
-                </button>
-                <button class="btn btn-outline-danger btn-sm" onclick="hapusKonteks('${k.id}', '${k.prodi.replace(/'/g, "\\'")}', '${k.tahunAjaran.replace(/'/g, "\\'")}')" title="Hapus Tahun Ajaran / Prodi ini">
-                  <i class="fa fa-trash"></i>
-                </button>
-              </div>
-            </div>`;
+              <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle">Total SKS Kelas: ${totalSksKelas}</span>
+            </div>
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="table table-bordered table-striped table-schedule mb-0">
+                  <thead>
+                    <tr>
+                      <th width="120">HARI</th>
+                      <th width="150">JAM</th>
+                      <th width="120">KODE.MK</th>
+                      <th>MATA KULIAH</th>
+                      <th width="80">SKS</th>
+                      <th>DOSEN PENGAMPU</th>
+                      <th width="150">RUANG</th>
+                      <th width="100" class="col-action">AKSI</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+        `;
+
+        items.forEach(item => {
+          cardHtml += `
+            <tr>
+              <td class="fw-bold text-center">${item.hari || '-'}</td>
+              <td class="text-center">${item.jamMulai} - ${item.jamSelesai}</td>
+              <td class="text-center">${item.kodeMk}</td>
+              <td><strong>${item.namaMk}</strong></td>
+              <td class="text-center">${item.sks}</td>
+              <td>${item.dosen}</td>
+              <td class="text-center">${item.ruangan}</td>
+              <td class="text-center col-action">
+                <button class="btn btn-warning btn-sm text-white me-1" onclick="openEditScheduleModal('${item.id}')" title="Edit"><i class="fa fa-pen"></i></button>
+                <button class="btn btn-danger btn-sm" onclick="deleteScheduleItem('${item.id}')" title="Hapus"><i class="fa fa-trash"></i></button>
+              </td>
+            </tr>
+          `;
         });
+
+        cardHtml += `
+                  </tbody>
+                  <tfoot>
+                    <tr class="table-light fw-bold">
+                      <td colspan="4" class="text-end">Total SKS Kelas ${kelas}:</td>
+                      <td class="text-center">${totalSksKelas}</td>
+                      <td colspan="2"></td>
+                      <td class="col-action"></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          </div>
+        `;
+        container.innerHTML += cardHtml;
       });
+    }
+
+    /**
+     * Merender kartu "Laporan Total SKS & Beban Mengajar Dosen" secara otomatis
+     * berdasarkan data jadwal yang sedang aktif (globalState.schedules).
+     * Dipanggil ulang setiap kali data jadwal atau data master berubah.
+     */
+    function renderLaporanSks() {
+      const container = document.getElementById('laporanSksContainer');
+      if (!container) return;
+
+      const summaryMap = getDosenSummaryData();
+      const sortedDosen = Object.keys(summaryMap).sort();
+
+      let rows = '';
+      let totalSksKeseluruhan = 0;
+
+      if (sortedDosen.length === 0) {
+        rows = `<tr><td colspan="6" class="text-center text-muted">Belum ada data jadwal atau dosen pengampu.</td></tr>`;
+      } else {
+        sortedDosen.forEach((dosen, idx) => {
+          const data = summaryMap[dosen];
+          const totalKelas = data.matkulDetails.reduce((sum, m) => sum + m.jumlahKelas, 0);
+          const mkList = data.matkulDetails.map(m => `${m.namaMk} (${m.kelasStr})`).join(', ');
+          totalSksKeseluruhan += data.totalSks;
+
+          let statusBadge = '<span class="badge bg-success">Normal</span>';
+          if (data.totalSks > 12) statusBadge = '<span class="badge bg-danger">Berat</span>';
+          else if (data.totalSks < 6) statusBadge = '<span class="badge bg-secondary">Ringan</span>';
+
+          rows += `
+            <tr>
+              <td class="text-center">${idx + 1}</td>
+              <td>${dosen}</td>
+              <td>${mkList}</td>
+              <td class="text-center">${totalKelas}</td>
+              <td class="text-center"><strong>${data.totalSks}</strong></td>
+              <td class="text-center">${statusBadge}</td>
+            </tr>`;
+        });
+      }
+
+      container.innerHTML = `
+        <div class="card shadow-sm border-0 mb-4">
+          <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <h5 class="mb-0 fw-bold"><i class="fa fa-chart-bar me-2 text-primary"></i>Laporan Total SKS &amp; Beban Mengajar Dosen</h5>
+            <button class="btn btn-outline-success btn-sm no-print" onclick="exportLaporanSksUtamaExcel()">
+              <i class="fa fa-file-excel me-1"></i> Export Excel
+            </button>
+          </div>
+          <div class="card-body">
+            <p class="text-muted small mb-3">Rekapitulasi jumlah SKS dan total beban mengajar seluruh dosen berdasarkan jadwal perkuliahan aktif.</p>
+            <div class="table-responsive">
+              <table class="table table-bordered table-striped align-middle mb-0" id="tableLaporanSksUtama">
+                <thead class="table-light">
+                  <tr>
+                    <th class="text-center" width="50">No</th>
+                    <th>Nama Dosen</th>
+                    <th>Mata Kuliah yang Diampu (Kelas)</th>
+                    <th class="text-center" width="110">Jumlah Kelas</th>
+                    <th class="text-center" width="110">Total SKS</th>
+                    <th class="text-center" width="120">Status Beban</th>
+                  </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+                <tfoot class="table-light fw-bold">
+                  <tr>
+                    <td colspan="4" class="text-end">Total Keseluruhan SKS:</td>
+                    <td class="text-center">${totalSksKeseluruhan}</td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    /**
+     * Export tabel Laporan SKS (versi utama/otomatis di halaman depan) ke Excel.
+     */
+    function exportLaporanSksUtamaExcel() {
+      let tableHTML = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+        <head><meta charset="utf-8"><title>Laporan SKS Dosen</title></head><body>`;
+      tableHTML += `<h2>Laporan Total SKS & Beban Mengajar Dosen</h2>`;
+      tableHTML += document.getElementById('tableLaporanSksUtama').outerHTML;
+      tableHTML += `</body></html>`;
+
+      const blob = new Blob([tableHTML], { type: 'application/vnd.ms-excel' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Laporan_SKS_Dosen_${new Date().toISOString().slice(0,10)}.xls`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+
+    /**
+     * Membuka modal "Cek Kelas / Ruangan / Slot Waktu Kosong".
+     */
+    function openKelasKosongModal() {
+      fillSelect('kosongFilterKelas', globalState.masters.kelas || [], 'nama', '-- Semua Kelas --');
+      fillSelect('kosongFilterRuangan', globalState.masters.ruangan || [], 'nama', '-- Semua Ruangan --');
+      renderKelasKosong();
+      renderRuanganKosong();
+      kelasKosongModalObj.show();
+    }
+
+    /**
+     * Merender grid Hari x Jam, menandai slot KOSONG / TERISI.
+     * mode: 'kelas' -> dicek berdasarkan field s.kelas
+     *       'ruangan' -> dicek berdasarkan field s.ruangan
+     */
+    function renderGridKosong({ containerId, filterId, masterList, mode }) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+
+      const selectedNama = document.getElementById(filterId).value;
+      const daftar = selectedNama
+        ? masterList.filter(item => item.nama === selectedNama)
+        : masterList;
+
+      const hariList = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+      const jamList = [...(globalState.masters.jam || [])].sort((a, b) => timeToMin(a.jamMulai) - timeToMin(b.jamMulai));
+
+      const labelJenis = mode === 'ruangan' ? 'Ruangan' : 'Kelas';
+
+      if (daftar.length === 0) {
+        container.innerHTML = `<div class="alert alert-info mb-0">Belum ada data ${labelJenis}. Silakan tambahkan di menu Kelola Data Master.</div>`;
+        return;
+      }
+      if (jamList.length === 0) {
+        container.innerHTML = `<div class="alert alert-info mb-0">Belum ada data Jam Kuliah Master. Silakan tambahkan di menu Kelola Data Master.</div>`;
+        return;
+      }
+
+      let html = '';
+      daftar.forEach(item => {
+        html += `<h6 class="fw-bold text-success mt-1 mb-2">${labelJenis}: ${item.nama}</h6>`;
+        html += `<div class="table-responsive mb-4"><table class="table table-bordered table-sm text-center align-middle mb-0">
+          <thead class="table-light"><tr><th style="white-space:nowrap;">Jam</th>`;
+        hariList.forEach(h => { html += `<th>${h}</th>`; });
+        html += `</tr></thead><tbody>`;
+
+        jamList.forEach(jam => {
+          const labelJam = jam.label || `${jam.jamMulai} - ${jam.jamSelesai}`;
+          html += `<tr><td class="fw-bold" style="white-space:nowrap;">${labelJam}</td>`;
+
+          hariList.forEach(hari => {
+            const bentrok = globalState.schedules.find(s =>
+              String(mode === 'ruangan' ? s.ruangan : s.kelas) === String(item.nama) &&
+              String(s.hari).toLowerCase() === hari.toLowerCase() &&
+              timeToMin(jam.jamMulai) < timeToMin(s.jamSelesai) &&
+              timeToMin(jam.jamSelesai) > timeToMin(s.jamMulai)
+            );
+
+            if (bentrok) {
+              const keterangan = mode === 'ruangan'
+                ? `${bentrok.namaMk} <br><small class="text-muted">(${bentrok.kelas})</small>`
+                : bentrok.namaMk;
+              html += `<td class="table-danger"><span class="badge bg-danger">Terisi</span><br><small>${keterangan}</small></td>`;
+            } else {
+              html += `<td class="table-success"><span class="badge bg-success">Kosong</span></td>`;
+            }
+          });
+
+          html += `</tr>`;
+        });
+
+        html += `</tbody></table></div>`;
+      });
+
       container.innerHTML = html;
     }
 
-    function bukaKonteks(id) {
-      window.location.href = 'jadwal.html?context=' + encodeURIComponent(id);
+    /**
+     * Merender grid Hari x Jam per Kelas, menandai slot yang KOSONG (belum ada jadwal)
+     * dan yang TERISI (sudah dipakai mata kuliah tertentu). Berdasarkan Jam Master
+     * dan Kelas yang terdaftar di Data Master.
+     */
+    function renderKelasKosong() {
+      renderGridKosong({
+        containerId: 'kelasKosongContainer',
+        filterId: 'kosongFilterKelas',
+        masterList: globalState.masters.kelas || [],
+        mode: 'kelas'
+      });
     }
 
-    function hapusKonteks(id, prodi, tahunAjaran) {
-      const konfirmasi = confirm(
-        `PERINGATAN!\n\nAnda akan menghapus:\nProgram Studi: ${prodi}\nTahun Ajaran: ${tahunAjaran}\n\n` +
-        `Seluruh data master (dosen, mata kuliah, jam, kelas, ruangan) dan jadwal milik Prodi & Tahun Ajaran ini akan DIHAPUS PERMANEN dan tidak dapat dikembalikan.\n\n` +
-        `Lanjutkan hapus?`
-      );
-      if (!konfirmasi) return;
-
-      showLoader('Menghapus data...');
-      apiCall()
-        .withSuccessHandler(res => {
-          hideLoader();
-          if (res.success) {
-            showAlert(res.message, 'success');
-            loadKonteksList();
-          } else {
-            showAlert(res.error, 'danger');
-          }
-        })
-        .withFailureHandler(err => {
-          hideLoader();
-          showAlert('Terjadi kesalahan koneksi: ' + err, 'danger');
-        })
-        .deleteKonteks(id);
+    /**
+     * Merender grid Hari x Jam per Ruangan, menandai slot yang KOSONG dan TERISI
+     * (beserta mata kuliah & kelas yang memakainya). Berdasarkan Jam Master dan
+     * Ruangan yang terdaftar di Data Master.
+     */
+    function renderRuanganKosong() {
+      renderGridKosong({
+        containerId: 'ruanganKosongContainer',
+        filterId: 'kosongFilterRuangan',
+        masterList: globalState.masters.ruangan || [],
+        mode: 'ruangan'
+      });
     }
 
-    function buatKonteksBaru() {
-      const tahunAjaran = document.getElementById('inputTahunAjaran').value.trim();
-      const prodi = document.getElementById('inputProdi').value.trim();
+    function filterSchedules() {
+      const fSem = document.getElementById('filterSemester').value.toLowerCase();
+      const fKls = document.getElementById('filterKelas').value.toLowerCase();
+      const fDos = document.getElementById('filterDosen').value.toLowerCase();
+      const fHar = document.getElementById('filterHari').value.toLowerCase();
+      const fRng = document.getElementById('filterRuangan').value.toLowerCase();
+      const keyword = document.getElementById('searchInput').value.toLowerCase();
 
-      if (!tahunAjaran || !prodi) {
-        showAlert('Tahun Ajaran dan Program Studi wajib diisi.', 'warning');
+      const filtered = globalState.schedules.filter(item => {
+        const matchSem = !fSem || String(item.semester).toLowerCase().includes(fSem);
+        const matchKls = !fKls || String(item.kelas).toLowerCase().includes(fKls);
+        const matchDos = !fDos || String(item.dosen).toLowerCase().includes(fDos);
+        const matchHar = !fHar || String(item.hari).toLowerCase().includes(fHar);
+        const matchRng = !fRng || String(item.ruangan).toLowerCase().includes(fRng);
+        
+        const matchKeyword = !keyword || 
+          String(item.namaMk).toLowerCase().includes(keyword) ||
+          String(item.kodeMk).toLowerCase().includes(keyword) ||
+          String(item.dosen).toLowerCase().includes(keyword) ||
+          String(item.kelas).toLowerCase().includes(keyword) ||
+          String(item.ruangan).toLowerCase().includes(keyword);
+
+        return matchSem && matchKls && matchDos && matchHar && matchRng && matchKeyword;
+      });
+
+      renderSchedules(filtered);
+    }
+
+    function resetFilter() {
+      document.getElementById('filterSemester').value = '';
+      document.getElementById('filterKelas').value = '';
+      document.getElementById('filterDosen').value = '';
+      document.getElementById('filterHari').value = '';
+      document.getElementById('filterRuangan').value = '';
+      document.getElementById('searchInput').value = '';
+      renderSchedules(globalState.schedules);
+    }
+
+    function openAddScheduleModal() {
+      document.getElementById('schedId').value = '';
+      document.getElementById('schedSemester').value = '';
+      document.getElementById('schedMataKuliah').value = '';
+      document.getElementById('schedKodeMk').value = '';
+      document.getElementById('schedSks').value = '';
+      document.getElementById('schedDosen').value = '';
+      document.getElementById('schedHari').value = '';
+      document.getElementById('schedJamMaster').value = '';
+      document.getElementById('schedJamMulai').value = '';
+      document.getElementById('schedJamSelesai').value = '';
+      document.getElementById('schedKelas').value = '';
+      document.getElementById('schedRuangan').value = '';
+      document.getElementById('schedKeterangan').value = '';
+      document.getElementById('scheduleModalTitle').innerText = 'Tambah Jadwal Kuliah';
+      
+      onSemesterChange();
+      updateJamMasterAvailability();
+      scheduleModalObj.show();
+    }
+
+    function openEditScheduleModal(id) {
+      const item = globalState.schedules.find(s => s.id === id);
+      if (!item) return;
+
+      document.getElementById('schedId').value = item.id;
+      document.getElementById('schedSemester').value = item.semester;
+      onSemesterChange();
+
+      document.getElementById('schedMataKuliah').value = item.kodeMk;
+      document.getElementById('schedKodeMk').value = item.kodeMk;
+      document.getElementById('schedSks').value = item.sks;
+      document.getElementById('schedDosen').value = item.dosen;
+      document.getElementById('schedHari').value = item.hari;
+      document.getElementById('schedKelas').value = item.kelas;
+      document.getElementById('schedRuangan').value = item.ruangan;
+      document.getElementById('schedKeterangan').value = item.keterangan || '';
+      
+      updateJamMasterAvailability();
+
+      const jamMasterSelect = document.getElementById('schedJamMaster');
+      jamMasterSelect.value = `${item.jamMulai}|${item.jamSelesai}`;
+      document.getElementById('schedJamMulai').value = item.jamMulai;
+      document.getElementById('schedJamSelesai').value = item.jamSelesai;
+
+      document.getElementById('scheduleModalTitle').innerText = 'Edit Jadwal Kuliah';
+      scheduleModalObj.show();
+    }
+
+    function saveSchedule() {
+      const data = {
+        id: document.getElementById('schedId').value,
+        semester: document.getElementById('schedSemester').value,
+        kodeMk: document.getElementById('schedKodeMk').value,
+        namaMk: document.getElementById('schedMataKuliah').options[document.getElementById('schedMataKuliah').selectedIndex]?.text.split(' (')[0] || '',
+        sks: document.getElementById('schedSks').value,
+        dosen: document.getElementById('schedDosen').value,
+        hari: document.getElementById('schedHari').value,
+        jamMulai: document.getElementById('schedJamMulai').value,
+        jamSelesai: document.getElementById('schedJamSelesai').value,
+        kelas: document.getElementById('schedKelas').value,
+        ruangan: document.getElementById('schedRuangan').value,
+        keterangan: document.getElementById('schedKeterangan').value
+      };
+
+      if (!data.semester || !data.kodeMk || !data.dosen || !data.hari || !data.jamMulai || !data.kelas || !data.ruangan) {
+        alert('Mohon lengkapi semua field yang wajib diisi (*)!');
         return;
       }
 
-      showLoader('Membuat Program Studi baru...');
-      apiCall()
-        .withSuccessHandler(res => {
-          hideLoader();
-          if (res.success) {
-            document.getElementById('inputTahunAjaran').value = '';
-            document.getElementById('inputProdi').value = '';
-            tampilkanTombolBukaSetelahBuat(res.data);
-            loadKonteksList();
-          } else {
-            showAlert(res.error, 'danger');
-          }
-        })
-        .withFailureHandler(err => {
-          hideLoader();
-          showAlert('Terjadi kesalahan koneksi: ' + err, 'danger');
-        })
-        .createNewKonteks(tahunAjaran, prodi);
+      showLoader('Menyimpan Jadwal...');
+      if (data.id) {
+        google.script.run.withSuccessHandler(handleSaveResponse).updateSchedule(data.id, data, CONTEXT_PREFIX);
+      } else {
+        google.script.run.withSuccessHandler(handleSaveResponse).addSchedule(data, CONTEXT_PREFIX);
+      }
     }
 
-    function tampilkanTombolBukaSetelahBuat(data) {
-      const box = document.getElementById('alertBox');
-      box.className = 'alert alert-success d-flex justify-content-between align-items-center flex-wrap gap-2';
-      box.innerHTML = `
-        <span><i class="fa fa-check-circle me-1"></i> "${data.prodi}" (${data.tahunAjaran}) berhasil dibuat.</span>
-        <button class="btn btn-success btn-sm" onclick="bukaKonteks('${data.id}')">
-          Buka Sekarang <i class="fa fa-arrow-right ms-1"></i>
-        </button>
-      `;
-      box.classList.remove('d-none');
+    function handleSaveResponse(res) {
+      hideLoader();
+      if (res.success) {
+        scheduleModalObj.hide();
+
+        // Update state lokal langsung dari data yang dikembalikan server (tanpa reload ulang seluruh data)
+        const idx = globalState.schedules.findIndex(s => String(s.id) === String(res.schedule.id));
+        if (idx !== -1) {
+          globalState.schedules[idx] = res.schedule;
+        } else {
+          globalState.schedules.push(res.schedule);
+        }
+
+        renderSchedules(globalState.schedules);
+        renderLaporanSks();
+        renderKelasKosong();
+        renderRuanganKosong();
+        updateStats();
+      } else if (res.isConflict) {
+        document.getElementById('laporanPesanError').innerText = res.message;
+        const list = document.getElementById('laporanDetailList');
+        list.innerHTML = '';
+        (res.details || []).forEach(d => {
+          list.innerHTML += `<li class="list-group-item list-group-item-danger">${d}</li>`;
+        });
+        laporanModalObj.show();
+      } else {
+        alert('Gagal menyimpan: ' + res.error);
+      }
+    }
+
+    function deleteScheduleItem(id) {
+      if (confirm('Apakah Anda yakin ingin menghapus jadwal ini?')) {
+        showLoader('Menghapus Jadwal...');
+        google.script.run.withSuccessHandler(res => {
+          hideLoader();
+          if (res.success) {
+            const idx = globalState.schedules.findIndex(s => String(s.id) === String(id));
+            if (idx !== -1) globalState.schedules.splice(idx, 1);
+
+            renderSchedules(globalState.schedules);
+            renderLaporanSks();
+            renderKelasKosong();
+            renderRuanganKosong();
+            updateStats();
+          } else {
+            alert('Gagal menghapus: ' + res.error);
+          }
+        }).deleteSchedule(id, CONTEXT_PREFIX);
+      }
+    }
+
+    function getDosenSummaryData() {
+      const summaryMap = {};
+      
+      globalState.schedules.forEach(item => {
+        const dosenName = item.dosen || 'Tanpa Nama Dosen';
+        const mkName = item.namaMk || item.kodeMk || '-';
+        const kelasName = item.kelas || '-';
+        const sksVal = parseInt(item.sks, 10) || 0;
+        
+        if (!summaryMap[dosenName]) {
+          summaryMap[dosenName] = { 
+            teachingMap: {}, 
+            totalSks: 0 
+          };
+        }
+        
+        if (!summaryMap[dosenName].teachingMap[mkName]) {
+          summaryMap[dosenName].teachingMap[mkName] = {
+            kelasList: new Set(),
+            sks: sksVal
+          };
+        }
+        
+        summaryMap[dosenName].teachingMap[mkName].kelasList.add(kelasName);
+      });
+
+      const formattedSummary = {};
+      Object.keys(summaryMap).forEach(dosen => {
+        let totalDosenSks = 0;
+        let matkulDetails = [];
+        
+        const teachingMap = summaryMap[dosen].teachingMap;
+        Object.keys(teachingMap).forEach(mk => {
+          const kelasArr = Array.from(teachingMap[mk].kelasList).sort();
+          const sksPerMk = teachingMap[mk].sks;
+          const subTotalSks = sksPerMk * kelasArr.length;
+          
+          totalDosenSks += subTotalSks;
+          matkulDetails.push({
+            namaMk: mk,
+            kelasStr: kelasArr.join(', '),
+            jumlahKelas: kelasArr.length,
+            sks: sksPerMk,
+            subTotalSks: subTotalSks
+          });
+        });
+
+        formattedSummary[dosen] = {
+          matkulDetails: matkulDetails,
+          totalSks: totalDosenSks
+        };
+      });
+
+      return formattedSummary;
+    }
+
+    /**
+     * Membangun HTML tabel Laporan Total SKS & Beban Mengajar Dosen
+     * dalam format sederhana (compatible Word/Excel) untuk disisipkan ke file export.
+     */
+    function buildLaporanSksExportHTML() {
+      const summaryMap = getDosenSummaryData();
+      const sortedDosen = Object.keys(summaryMap).sort();
+
+      let html = `<h3>Laporan Total SKS & Beban Mengajar Dosen</h3>`;
+      html += `<table border="1" cellspacing="0" cellpadding="5" style="border-collapse:collapse;width:100%;">
+        <thead><tr style="background-color:#0d6efd;color:#ffffff;">
+          <th>No</th><th>Nama Dosen</th><th>Mata Kuliah yang Diampu (Kelas)</th><th>Jumlah Kelas</th><th>Total SKS</th>
+        </tr></thead><tbody>`;
+
+      let totalSksKeseluruhan = 0;
+      if (sortedDosen.length === 0) {
+        html += `<tr><td colspan="5" style="text-align:center;">Belum ada data jadwal atau dosen pengampu.</td></tr>`;
+      } else {
+        sortedDosen.forEach((dosen, idx) => {
+          const data = summaryMap[dosen];
+          const totalKelas = data.matkulDetails.reduce((sum, m) => sum + m.jumlahKelas, 0);
+          const mkList = data.matkulDetails.map(m => `${m.namaMk} (${m.kelasStr})`).join(', ');
+          totalSksKeseluruhan += data.totalSks;
+
+          html += `<tr>
+            <td style="text-align:center;">${idx + 1}</td>
+            <td>${dosen}</td>
+            <td>${mkList}</td>
+            <td style="text-align:center;">${totalKelas}</td>
+            <td style="text-align:center;">${data.totalSks}</td>
+          </tr>`;
+        });
+      }
+
+      html += `<tr><td colspan="4" style="text-align:right;font-weight:bold;">Total Keseluruhan SKS:</td><td style="text-align:center;font-weight:bold;">${totalSksKeseluruhan}</td></tr>`;
+      html += `</tbody></table>`;
+      return html;
+    }
+
+    function exportToExcel() {
+      let tableHTML = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+        <head><meta charset="utf-8"><title>Export Jadwal</title></head><body>`;
+      tableHTML += `<h2 style="text-align:center;margin-bottom:0;">SISTEM INFORMASI JADWAL AKADEMIK</h2>`;
+      tableHTML += `<h3 style="text-align:center;margin:2px 0;">Program Studi: ${PRODI}</h3>`;
+      tableHTML += `<h4 style="text-align:center;margin:2px 0 16px 0;color:#555;">Tahun Ajaran: ${TAHUN_AJARAN}</h4>`;
+      
+      const grouped = {};
+      globalState.schedules.forEach(item => {
+        const sem = item.semester || 'Tanpa Semester';
+        const cls = item.kelas || 'Tanpa Kelas';
+        const key = `${sem}___${cls}`;
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push(item);
+      });
+
+      const dayOrder = { 'Senin': 1, 'Selasa': 2, 'Rabu': 3, 'Kamis': 4, 'Jumat': 5, 'Sabtu': 6, 'Minggu': 7 };
+
+      Object.keys(grouped).sort().forEach(groupKey => {
+        const [semester, kelas] = groupKey.split('___');
+        const items = grouped[groupKey];
+        items.sort((a, b) => (dayOrder[a.hari] || 99) - (dayOrder[b.hari] || 99) || timeToMin(a.jamMulai) - timeToMin(b.jamMulai));
+        const totalSksKelas = items.reduce((sum, item) => sum + (Number(item.sks) || 0), 0);
+
+        tableHTML += `<h3>${semester} | Kelas: ${kelas} (Total SKS: ${totalSksKelas})</h3>`;
+        tableHTML += `<table border="1"><thead><tr style="background-color:#198754;color:#ffffff;">
+          <th>HARI</th><th>JAM</th><th>KODE.MK</th><th>MATA KULIAH</th><th>SKS</th><th>DOSEN PENGAMPU</th><th>RUANG</th>
+          </tr></thead><tbody>`;
+
+        items.forEach(item => {
+          tableHTML += `<tr>
+            <td>${item.hari || '-'}</td>
+            <td>${item.jamMulai} - ${item.jamSelesai}</td>
+            <td>${item.kodeMk}</td>
+            <td>${item.namaMk}</td>
+            <td>${item.sks}</td>
+            <td>${item.dosen}</td>
+            <td style="mso-number-format:'\@';">${String(item.ruangan || '').trim()}</td>
+          </tr>`;
+        });
+        tableHTML += `<tr style="font-weight:bold;background-color:#f1f1f1;">
+            <td colspan="4" style="text-align:right;">Total SKS Kelas ${kelas}:</td>
+            <td>${totalSksKelas}</td>
+            <td colspan="2"></td>
+          </tr>`;
+        tableHTML += `</tbody></table><br>`;
+      });
+
+      tableHTML += `<br>`;
+      tableHTML += buildLaporanSksExportHTML();
+
+      tableHTML += `</body></html>`;
+      const blob = new Blob([tableHTML], { type: 'application/vnd.ms-excel' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Jadwal_${PRODI.replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.xls`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+
+    function exportToWord() {
+      let content = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+        <head><meta charset='utf-8'><title>Export Word</title></head><body>`;
+      content += `<h2 style="text-align:center;margin-bottom:0;">SISTEM INFORMASI JADWAL AKADEMIK</h2>`;
+      content += `<h3 style="text-align:center;margin:2px 0;">Program Studi: ${PRODI}</h3>`;
+      content += `<h4 style="text-align:center;margin:2px 0 16px 0;color:#555;">Tahun Ajaran: ${TAHUN_AJARAN}</h4><br>`;
+
+      const grouped = {};
+      globalState.schedules.forEach(item => {
+        const sem = item.semester || 'Tanpa Semester';
+        const cls = item.kelas || 'Tanpa Kelas';
+        const key = `${sem}___${cls}`;
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push(item);
+      });
+
+      const dayOrder = { 'Senin': 1, 'Selasa': 2, 'Rabu': 3, 'Kamis': 4, 'Jumat': 5, 'Sabtu': 6, 'Minggu': 7 };
+
+      Object.keys(grouped).sort().forEach(groupKey => {
+        const [semester, kelas] = groupKey.split('___');
+        const items = grouped[groupKey];
+        items.sort((a, b) => (dayOrder[a.hari] || 99) - (dayOrder[b.hari] || 99) || timeToMin(a.jamMulai) - timeToMin(b.jamMulai));
+        const totalSksKelas = items.reduce((sum, item) => sum + (Number(item.sks) || 0), 0);
+
+        content += `<h3>${semester} | Kelas: ${kelas} (Total SKS: ${totalSksKelas})</h3>`;
+        content += `<table border="1" cellspacing="0" cellpadding="5" style="border-collapse:collapse;width:100%;">
+          <thead><tr style="background-color:#198754;color:#ffffff;">
+            <th>HARI</th><th>JAM</th><th>KODE.MK</th><th>MATA KULIAH</th><th>SKS</th><th>DOSEN PENGAMPU</th><th>RUANG</th>
+          </tr></thead><tbody>`;
+
+        items.forEach(item => {
+          content += `<tr>
+            <td>${item.hari || '-'}</td>
+            <td>${item.jamMulai} - ${item.jamSelesai}</td>
+            <td>${item.kodeMk}</td>
+            <td>${item.namaMk}</td>
+            <td>${item.sks}</td>
+            <td>${item.dosen}</td>
+            <td>${item.ruangan}</td>
+          </tr>`;
+        });
+        content += `<tr style="font-weight:bold;background-color:#f1f1f1;">
+            <td colspan="4" style="text-align:right;">Total SKS Kelas ${kelas}:</td>
+            <td>${totalSksKelas}</td>
+            <td colspan="2"></td>
+          </tr>`;
+        content += `</tbody></table><br><br>`;
+      });
+
+      content += `<br>`;
+      content += buildLaporanSksExportHTML();
+
+      content += `</body></html>`;
+      const blob = new Blob(['\ufeff' + content], { type: 'application/msword' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Jadwal_${PRODI.replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.doc`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+
+    function exportToPDF() { window.print(); }
+
+    function openDosenSksReport() {
+      const summaryMap = getDosenSummaryData();
+      const tbody = document.querySelector('#tableDosenSks tbody');
+      tbody.innerHTML = '';
+
+      const sortedDosen = Object.keys(summaryMap).sort();
+      if (sortedDosen.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted">Belum ada data jadwal atau dosen pengampu.</td></tr>`;
+      } else {
+        sortedDosen.forEach((dosen, idx) => {
+          const data = summaryMap[dosen];
+          let listHtml = '<ul class="mb-0 ps-3">';
+          data.matkulDetails.forEach(m => {
+            listHtml += `<li><strong>${m.namaMk}</strong> — Mengajar di kelas: <span class="badge bg-secondary">${m.kelasStr}</span> (${m.jumlahKelas} Kelas × ${m.sks} SKS = <strong>${m.subTotalSks} SKS</strong>)</li>`;
+          });
+          listHtml += '</ul>';
+
+          tbody.innerHTML += `
+            <tr>
+              <td class="text-center">${idx + 1}</td>
+              <td><strong>${dosen}</strong></td>
+              <td>${listHtml}</td>
+              <td class="text-center"><strong>${data.totalSks} SKS</strong></td>
+            </tr>
+          `;
+        });
+      }
+      dosenSksModalObj.show();
+    }
+
+    function exportDosenSksExcel() {
+      let tableHTML = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+        <head><meta charset="utf-8"><title>Laporan SKS Dosen</title></head><body>`;
+      tableHTML += `<h2>Laporan Total SKS & Beban Mengajar Dosen</h2>`;
+      tableHTML += document.getElementById('tableDosenSks').outerHTML;
+      tableHTML += `</body></html>`;
+
+      const blob = new Blob([tableHTML], { type: 'application/vnd.ms-excel' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Laporan_SKS_Dosen_${new Date().toISOString().slice(0,10)}.xls`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+
+    function openMasterManager() {
+      resetMasterForm();
+      renderMasterTables();
+      masterModalObj.show();
+    }
+
+    function resetMasterForm() {
+      document.getElementById('editMasterType').value = '';
+      document.getElementById('editMasterId').value = '';
+      document.getElementById('masterAlert').classList.add('d-none');
+
+      document.getElementById('inputMasterDosen').value = '';
+      document.getElementById('inputMkKode').value = '';
+      document.getElementById('inputMkNama').value = '';
+      document.getElementById('inputMkSks').value = '';
+      document.getElementById('inputMkSemester').value = '';
+      document.getElementById('inputJamMulai').value = '';
+      document.getElementById('inputJamSelesai').value = '';
+      document.getElementById('inputMasterKelas').value = '';
+      document.getElementById('inputMasterRuangan').value = '';
+
+      const types = ['Dosen', 'Mk', 'Jam', 'Kelas', 'Ruangan'];
+      types.forEach(t => {
+        const btn = document.getElementById(`btnSubmit${t}`);
+        const cancel = document.getElementById(`cancelEdit${t}`);
+        if (btn) {
+          btn.className = 'btn btn-success btn-sm w-100';
+          btn.innerHTML = '<i class="fa fa-plus me-1"></i> Tambah';
+        }
+        if (cancel) cancel.style.display = 'none';
+      });
+    }
+
+    function renderMasterTables() {
+      renderTableMasterGeneric('tableMasterDosen', globalState.masters.dosen, ['nama'], 'dosen');
+      renderTableMasterGeneric('tableMasterMk', globalState.masters.mataKuliah, ['kode', 'nama', 'sks', 'semester'], 'mata_kuliah');
+      renderTableMasterGeneric('tableMasterJam', globalState.masters.jam, ['jamMulai', 'jamSelesai', 'label'], 'jam');
+      renderTableMasterGeneric('tableMasterKelas', globalState.masters.kelas, ['nama'], 'kelas');
+      renderTableMasterGeneric('tableMasterRuangan', globalState.masters.ruangan, ['nama'], 'ruangan');
+    }
+
+    function renderTableMasterGeneric(tableId, dataList, fields, type) {
+      const tbody = document.querySelector(`#${tableId} tbody`);
+      tbody.innerHTML = '';
+      if (!dataList || dataList.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="10" class="text-center text-muted">Tidak ada data.</td></tr>`;
+        return;
+      }
+      dataList.forEach(item => {
+        let tr = '<tr>';
+        fields.forEach(f => { tr += `<td>${item[f] || '-'}</td>`; });
+        tr += `<td class="text-center">
+          <button class="btn btn-warning btn-sm text-white me-1" onclick="editMasterItem('${type}', '${item.id}')" title="Edit"><i class="fa fa-pen"></i></button>
+          <button class="btn btn-danger btn-sm" onclick="deleteMasterItem('${type}', '${item.id}')" title="Hapus"><i class="fa fa-trash"></i></button>
+        </td>`;
+        tr += '</tr>';
+        tbody.innerHTML += tr;
+      });
+    }
+
+    function editMasterItem(type, id) {
+      let list = [];
+      if (type === 'dosen') list = globalState.masters.dosen;
+      else if (type === 'mata_kuliah') list = globalState.masters.mataKuliah;
+      else if (type === 'jam') list = globalState.masters.jam;
+      else if (type === 'kelas') list = globalState.masters.kelas;
+      else if (type === 'ruangan') list = globalState.masters.ruangan;
+
+      const item = list.find(x => String(x.id) === String(id));
+      if (!item) return;
+
+      resetMasterForm();
+      document.getElementById('editMasterType').value = type;
+      document.getElementById('editMasterId').value = item.id;
+
+      let pascalType = '';
+      if (type === 'dosen') {
+        pascalType = 'Dosen';
+        document.getElementById('inputMasterDosen').value = item.nama || '';
+      } else if (type === 'mata_kuliah') {
+        pascalType = 'Mk';
+        document.getElementById('inputMkKode').value = item.kode || '';
+        document.getElementById('inputMkNama').value = item.nama || '';
+        document.getElementById('inputMkSks').value = item.sks || '';
+        document.getElementById('inputMkSemester').value = item.semester || '';
+      } else if (type === 'jam') {
+        pascalType = 'Jam';
+        document.getElementById('inputJamMulai').value = item.jamMulai || '';
+        document.getElementById('inputJamSelesai').value = item.jamSelesai || '';
+      } else if (type === 'kelas') {
+        pascalType = 'Kelas';
+        document.getElementById('inputMasterKelas').value = item.nama || '';
+      } else if (type === 'ruangan') {
+        pascalType = 'Ruangan';
+        document.getElementById('inputMasterRuangan').value = item.nama || '';
+      }
+
+      const btn = document.getElementById(`btnSubmit${pascalType}`);
+      const cancel = document.getElementById(`cancelEdit${pascalType}`);
+      if (btn) {
+        btn.className = 'btn btn-warning btn-sm text-white w-100';
+        btn.innerHTML = '<i class="fa fa-save me-1"></i> Update';
+      }
+      if (cancel) cancel.style.display = 'block';
+    }
+
+    function saveMasterData(type) {
+      const editId = document.getElementById('editMasterId').value;
+      let data = {};
+
+      if (type === 'dosen') {
+        data.nama = document.getElementById('inputMasterDosen').value;
+      } else if (type === 'mata_kuliah') {
+        data.kode = document.getElementById('inputMkKode').value;
+        data.nama = document.getElementById('inputMkNama').value;
+        data.sks = document.getElementById('inputMkSks').value;
+        data.semester = document.getElementById('inputMkSemester').value;
+      } else if (type === 'jam') {
+        data.jamMulai = document.getElementById('inputJamMulai').value;
+        data.jamSelesai = document.getElementById('inputJamSelesai').value;
+        data.label = `${data.jamMulai} - ${data.jamSelesai}`;
+      } else if (type === 'kelas') {
+        data.nama = document.getElementById('inputMasterKelas').value;
+      } else if (type === 'ruangan') {
+        data.nama = document.getElementById('inputMasterRuangan').value;
+      }
+
+      showLoader(editId ? 'Memperbarui Data...' : 'Menambahkan Data...');
+
+      if (editId) {
+        google.script.run.withSuccessHandler(res => {
+          hideLoader();
+          if (res.success) {
+            let targetList = [];
+            if (type === 'dosen') targetList = globalState.masters.dosen;
+            else if (type === 'mata_kuliah') targetList = globalState.masters.mataKuliah;
+            else if (type === 'jam') targetList = globalState.masters.jam;
+            else if (type === 'kelas') targetList = globalState.masters.kelas;
+            else if (type === 'ruangan') targetList = globalState.masters.ruangan;
+
+            const idx = targetList.findIndex(x => String(x.id) === String(editId));
+            if (idx !== -1) {
+              targetList[idx] = { id: editId, ...data };
+            }
+
+            resetMasterForm();
+            renderMasterTables();
+            populateDropdowns();
+            renderSchedules(globalState.schedules);
+            renderLaporanSks();
+            updateStats();
+
+            showMasterAlert('Data master berhasil diperbarui!', 'success');
+          } else {
+            alert('Gagal memperbarui data master: ' + res.error);
+          }
+        }).updateMaster(type, editId, data, CONTEXT_PREFIX);
+      } else {
+        google.script.run.withSuccessHandler(res => {
+          hideLoader();
+          if (res.success) {
+            let targetList = [];
+            if (type === 'dosen') targetList = globalState.masters.dosen;
+            else if (type === 'mata_kuliah') targetList = globalState.masters.mataKuliah;
+            else if (type === 'jam') targetList = globalState.masters.jam;
+            else if (type === 'kelas') targetList = globalState.masters.kelas;
+            else if (type === 'ruangan') targetList = globalState.masters.ruangan;
+
+            targetList.push(res.data);
+
+            resetMasterForm();
+            renderMasterTables();
+            populateDropdowns();
+
+            showMasterAlert('Data master baru berhasil ditambahkan!', 'success');
+          } else {
+            alert('Gagal menambah data master: ' + res.error);
+          }
+        }).addMaster(type, data, CONTEXT_PREFIX);
+      }
+    }
+
+    function deleteMasterItem(type, id) {
+      if (confirm('Hapus data master ini?')) {
+        showLoader('Menghapus Data...');
+        google.script.run.withSuccessHandler(res => {
+          hideLoader();
+          if (res.success) {
+            let targetList = [];
+            if (type === 'dosen') targetList = globalState.masters.dosen;
+            else if (type === 'mata_kuliah') targetList = globalState.masters.mataKuliah;
+            else if (type === 'jam') targetList = globalState.masters.jam;
+            else if (type === 'kelas') targetList = globalState.masters.kelas;
+            else if (type === 'ruangan') targetList = globalState.masters.ruangan;
+
+            const idx = targetList.findIndex(x => String(x.id) === String(id));
+            if (idx !== -1) targetList.splice(idx, 1);
+
+            renderMasterTables();
+            populateDropdowns();
+            renderSchedules(globalState.schedules);
+            renderLaporanSks();
+            updateStats();
+
+            showMasterAlert('Data master berhasil dihapus!', 'warning');
+          } else {
+            alert('Gagal menghapus: ' + res.error);
+          }
+        }).deleteMaster(type, id, CONTEXT_PREFIX);
+      }
     }
   </script>
 </body>
