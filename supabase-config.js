@@ -62,7 +62,7 @@ function apiCall() {
     'getInitialData', 'addMaster', 'updateMaster', 'deleteMaster',
     'addSchedule', 'updateSchedule', 'deleteSchedule', 'deleteAllSchedules',
     'clearAllData', 'getKonteksList', 'createNewKonteks', 'deleteKonteks',
-    'getKonteksInfo'
+    'getKonteksInfo', 'salinDataMaster'
   ];
 
   methodNames.forEach(name => {
@@ -144,7 +144,7 @@ window.__api = {
     }
   },
 
-  async createNewKonteks(tahunAjaran, prodi) {
+  async createNewKonteks(tahunAjaran, prodi, sourceKonteksId) {
     try {
       tahunAjaran = String(tahunAjaran || '').trim();
       prodi = String(prodi || '').trim();
@@ -163,11 +163,52 @@ window.__api = {
         .select().single();
       if (error) throw error;
 
+      let pesanTambahan = '';
+      if (sourceKonteksId) {
+        const salin = await this.salinDataMaster(sourceKonteksId, data.id);
+        if (!salin.success) {
+          pesanTambahan = ` (Konteks berhasil dibuat, tapi salin Data Master gagal: ${salin.error})`;
+        } else {
+          pesanTambahan = ' Data Master (Dosen, Mata Kuliah, Jam, Kelas, Ruangan) berhasil disalin dari konteks sebelumnya — Jadwal dibiarkan kosong.';
+        }
+      }
+
       return {
         success: true,
-        message: 'Program Studi & Tahun Ajaran baru berhasil dibuat.',
+        message: 'Program Studi & Tahun Ajaran baru berhasil dibuat.' + pesanTambahan,
         data: { id: data.id, tahunAjaran: data.tahun_ajaran, prodi: data.prodi }
       };
+    } catch (err) {
+      return { success: false, error: err.message || String(err) };
+    }
+  },
+
+  /**
+   * Menyalin Data Master (dosen, mata_kuliah, jam, kelas, ruangan) dari satu
+   * konteks ke konteks lain. Jadwal SENGAJA TIDAK ikut disalin.
+   */
+  async salinDataMaster(sourceKonteksId, targetKonteksId) {
+    try {
+      const tabelDanKolom = {
+        dosen: ['nama'],
+        mata_kuliah: ['kode', 'nama', 'sks', 'semester'],
+        jam: ['jam_mulai', 'jam_selesai', 'label'],
+        kelas: ['nama'],
+        ruangan: ['nama']
+      };
+
+      for (const [table, kolom] of Object.entries(tabelDanKolom)) {
+        const { data: rows, error: selErr } = await sb.from(table).select(kolom.join(','))
+          .eq('konteks_id', sourceKonteksId);
+        if (selErr) throw selErr;
+        if (rows && rows.length > 0) {
+          const insertRows = rows.map(r => ({ ...r, konteks_id: targetKonteksId }));
+          const { error: insErr } = await sb.from(table).insert(insertRows);
+          if (insErr) throw insErr;
+        }
+      }
+
+      return { success: true };
     } catch (err) {
       return { success: false, error: err.message || String(err) };
     }
