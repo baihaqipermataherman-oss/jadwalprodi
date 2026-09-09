@@ -95,10 +95,15 @@
           </div>
           <div class="col-12">
             <label class="form-label fw-bold">Salin Data Master dari (opsional)</label>
-            <select id="inputSalinDari" class="form-select">
+            <select id="inputSalinDari" class="form-select" title="Dosen, Mata Kuliah, Jam, Kelas & Ruangan disalin. Jadwal tidak ikut disalin kecuali dicentang di bawah." onchange="toggleCheckboxSalinJadwal()">
               <option value="">-- Mulai kosong (tidak menyalin apa pun) --</option>
             </select>
-            <small class="text-muted">Kalau dipilih, data Dosen, Mata Kuliah, Jam, Kelas & Ruangan akan disalin dari Tahun Ajaran/Prodi yang dipilih. Jadwal tidak ikut disalin (mulai kosong).</small>
+            <div class="form-check mt-2" id="wrapperSalinJadwal" style="display:none;">
+              <input class="form-check-input" type="checkbox" id="inputSalinJadwalJuga">
+              <label class="form-check-label small" for="inputSalinJadwalJuga" title="Menyalin seluruh baris Jadwal apa adanya dari konteks sumber.">
+                Salin Jadwal juga (bukan cuma Data Master)
+              </label>
+            </div>
           </div>
         </div>
         <div class="text-end mt-3">
@@ -207,18 +212,21 @@
                 </div>
               </div>
               <div id="salinPanel-${k.id}" class="d-none mt-3 p-3 bg-light rounded border">
-                <label class="form-label fw-bold small mb-1">Salin Data Master (Dosen, Mata Kuliah, Jam, Kelas, Ruangan) dari:</label>
-                <div class="d-flex gap-2 flex-wrap">
+                <label class="form-label fw-bold small mb-1">Salin Data Master dari:</label>
+                <div class="d-flex gap-2 flex-wrap align-items-center">
                   <select id="salinSumber-${k.id}" class="form-select form-select-sm" style="max-width: 320px;">
                     <option value="">-- Pilih Prodi/Tahun Ajaran sumber --</option>
                     ${opsiSumberLain}
                   </select>
-                  <button class="btn btn-primary btn-sm" onclick="jalankanSalinData('${k.id}')">
+                  <div class="form-check mb-0">
+                    <input class="form-check-input" type="checkbox" id="salinJadwal-${k.id}">
+                    <label class="form-check-label small" for="salinJadwal-${k.id}">Salin Jadwal juga</label>
+                  </div>
+                  <button class="btn btn-primary btn-sm" onclick="jalankanSalinData('${k.id}')" title="Dosen, Mata Kuliah, Jam, Kelas & Ruangan disalin (ditambahkan, bukan menimpa).">
                     <i class="fa fa-check me-1"></i> Salin Sekarang
                   </button>
                   <button class="btn btn-outline-secondary btn-sm" onclick="toggleSalinPanel('${k.id}')">Batal</button>
                 </div>
-                <small class="text-muted d-block mt-1">Jadwal TIDAK ikut disalin — hanya Data Master. Data master yang sudah ada di sini tidak dihapus (ditambahkan).</small>
               </div>
             </div>`;
         });
@@ -233,17 +241,21 @@
 
     function jalankanSalinData(targetId) {
       const sourceId = document.getElementById('salinSumber-' + targetId).value;
+      const salinJadwalJuga = document.getElementById('salinJadwal-' + targetId).checked;
       if (!sourceId) {
         showAlert('Pilih dulu Prodi/Tahun Ajaran sumbernya.', 'warning');
         return;
       }
 
-      showLoader('Menyalin Data Master...');
+      showLoader(salinJadwalJuga ? 'Menyalin Data Master & Jadwal...' : 'Menyalin Data Master...');
       apiCall()
         .withSuccessHandler(res => {
           hideLoader();
           if (res.success) {
-            showAlert('Data Master berhasil disalin. Silakan buka Prodi ini untuk memeriksa.', 'success');
+            showAlert(
+              (salinJadwalJuga ? 'Data Master & Jadwal berhasil disalin.' : 'Data Master berhasil disalin.') + ' Silakan buka Prodi ini untuk memeriksa.',
+              'success'
+            );
             toggleSalinPanel(targetId);
           } else {
             showAlert('Gagal menyalin: ' + res.error, 'danger');
@@ -253,7 +265,7 @@
           hideLoader();
           showAlert('Terjadi kesalahan koneksi: ' + err, 'danger');
         })
-        .salinDataMaster(sourceId, targetId);
+        .salinDataMaster(sourceId, targetId, salinJadwalJuga);
     }
 
     function bukaKonteks(id) {
@@ -286,10 +298,17 @@
         .deleteKonteks(id);
     }
 
+    function toggleCheckboxSalinJadwal() {
+      const adaSumber = !!document.getElementById('inputSalinDari').value;
+      document.getElementById('wrapperSalinJadwal').style.display = adaSumber ? 'block' : 'none';
+      if (!adaSumber) document.getElementById('inputSalinJadwalJuga').checked = false;
+    }
+
     function buatKonteksBaru() {
       const tahunAjaran = document.getElementById('inputTahunAjaran').value.trim();
       const prodi = document.getElementById('inputProdi').value.trim();
       const sourceKonteksId = document.getElementById('inputSalinDari').value;
+      const salinJadwalJuga = document.getElementById('inputSalinJadwalJuga').checked;
 
       if (!tahunAjaran || !prodi) {
         showAlert('Tahun Ajaran dan Program Studi wajib diisi.', 'warning');
@@ -304,6 +323,8 @@
             document.getElementById('inputTahunAjaran').value = '';
             document.getElementById('inputProdi').value = '';
             document.getElementById('inputSalinDari').value = '';
+            document.getElementById('inputSalinJadwalJuga').checked = false;
+            toggleCheckboxSalinJadwal();
             tampilkanTombolBukaSetelahBuat(res.data, res.message);
             loadKonteksList();
           } else {
@@ -314,7 +335,7 @@
           hideLoader();
           showAlert('Terjadi kesalahan koneksi: ' + err, 'danger');
         })
-        .createNewKonteks(tahunAjaran, prodi, sourceKonteksId || null);
+        .createNewKonteks(tahunAjaran, prodi, sourceKonteksId || null, salinJadwalJuga);
     }
 
     function tampilkanTombolBukaSetelahBuat(data, pesan) {
