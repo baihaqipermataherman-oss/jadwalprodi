@@ -109,37 +109,31 @@
 
     <!-- Header / Statistik -->
     <div class="row g-3 mb-4">
-      <div class="col-md-2 col-4">
+      <div class="col-md col-6">
         <div class="card card-stat bg-primary p-3">
           <small>Total Jadwal</small>
           <h3 id="statTotalJadwal" class="fw-bold mb-0">0</h3>
         </div>
       </div>
-      <div class="col-md-2 col-4">
-        <div class="card card-stat bg-danger p-3">
-          <small>Jadwal Bentrok</small>
-          <h3 id="statJadwalBentrok" class="fw-bold mb-0">0</h3>
-        </div>
-      </div>
-      <div class="col-md-2 col-4">
+      <div class="col-md col-6">
         <div class="card card-stat bg-success p-3">
           <small>Jumlah Kelas</small>
           <h3 id="statJumlahKelas" class="fw-bold mb-0">0</h3>
         </div>
       </div>
-      <div class="col-md-2 col-4">
+      <div class="col-md col-6">
         <div class="card card-stat bg-info p-3">
           <small>Jumlah Dosen</small>
           <h3 id="statJumlahDosen" class="fw-bold mb-0">0</h3>
         </div>
       </div>
-      <div class="col-md-2 col-4">
+      <div class="col-md col-6">
         <div class="card card-stat bg-secondary p-3">
           <small>Jumlah Ruangan</small>
           <h3 id="statJumlahRuangan" class="fw-bold mb-0">0</h3>
         </div>
       </div>
-      <div class="col-md-2 col-4">
+      <div class="col-md col-6">
         <div class="card card-stat bg-dark p-3">
           <small>Mata Kuliah</small>
           <h3 id="statMataKuliah" class="fw-bold mb-0">0</h3>
@@ -213,8 +207,7 @@
         </div>
         <div class="col-md-4 text-end">
           <button class="btn btn-outline-success btn-sm me-2 mb-1" onclick="openKelasKosongModal()"><i class="fa fa-calendar-check me-1"></i> Cek Kelas Kosong</button>
-          <button class="btn btn-outline-dark btn-sm me-2 mb-1" onclick="openMasterManager()"><i class="fa fa-database me-1"></i> Kelola Data Master</button>
-          <button class="btn btn-outline-danger btn-sm mb-1" onclick="confirmDeleteAllSchedules()"><i class="fa fa-trash me-1"></i> Hapus Semua</button>
+          <button class="btn btn-outline-dark btn-sm mb-1" onclick="openMasterManager()"><i class="fa fa-database me-1"></i> Kelola Data Master</button>
         </div>
       </div>
 
@@ -829,22 +822,6 @@
       document.getElementById('statJumlahDosen').innerText = (globalState.masters.dosen || []).length;
       document.getElementById('statJumlahRuangan').innerText = (globalState.masters.ruangan || []).length;
       document.getElementById('statMataKuliah').innerText = (globalState.masters.mataKuliah || []).length;
-      
-      let bentrokCount = 0;
-      globalState.schedules.forEach(s1 => {
-        globalState.schedules.forEach(s2 => {
-          if (s1.id !== s2.id && s1.hari === s2.hari) {
-            const start1 = timeToMin(s1.jamMulai), end1 = timeToMin(s1.jamSelesai);
-            const start2 = timeToMin(s2.jamMulai), end2 = timeToMin(s2.jamSelesai);
-            if (start1 < end2 && end1 > start2) {
-              if (s1.ruangan === s2.ruangan || s1.dosen === s2.dosen || s1.kelas === s2.kelas) {
-                bentrokCount++;
-              }
-            }
-          }
-        });
-      });
-      document.getElementById('statJadwalBentrok').innerText = Math.floor(bentrokCount / 2);
     }
 
     function renderSchedules(dataList) {
@@ -1307,17 +1284,6 @@
             alert('Gagal menghapus: ' + res.error);
           }
         }).deleteSchedule(id, CONTEXT_ID);
-      }
-    }
-
-    function confirmDeleteAllSchedules() {
-      if (confirm('PERINGATAN: Tindakan ini akan menghapus SELURUH data jadwal yang ada. Lanjutkan?')) {
-        showLoader('Menghapus Semua Jadwal...');
-        apiCall().withSuccessHandler(res => {
-          hideLoader();
-          if (res.success) loadApp();
-          else alert('Gagal menghapus semua jadwal: ' + res.error);
-        }).deleteAllSchedules(CONTEXT_ID);
       }
     }
 
