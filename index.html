@@ -182,24 +182,78 @@
       Object.keys(grouped).forEach(tahun => {
         html += `<h6 class="text-muted mt-2 mb-2">${tahun}</h6>`;
         grouped[tahun].forEach(k => {
+          const opsiSumberLain = daftarKonteks
+            .filter(other => other.id !== k.id)
+            .map(other => `<option value="${other.id}">${other.prodi} - ${other.tahunAjaran}</option>`)
+            .join('');
+
           html += `
-            <div class="konteks-item">
-              <div>
-                <div class="fw-bold"><i class="fa fa-building-columns me-2 text-success"></i>${k.prodi}</div>
-                <small class="text-muted">${k.tahunAjaran}</small>
+            <div class="konteks-item flex-column align-items-stretch">
+              <div class="d-flex align-items-center justify-content-between w-100">
+                <div>
+                  <div class="fw-bold"><i class="fa fa-building-columns me-2 text-success"></i>${k.prodi}</div>
+                  <small class="text-muted">${k.tahunAjaran}</small>
+                </div>
+                <div class="d-flex gap-2">
+                  <button class="btn btn-success btn-sm" onclick="bukaKonteks('${k.id}')">
+                    Buka <i class="fa fa-arrow-right ms-1"></i>
+                  </button>
+                  <button class="btn btn-outline-primary btn-sm" onclick="toggleSalinPanel('${k.id}')" title="Salin Data Master dari Prodi/Tahun Ajaran lain">
+                    <i class="fa fa-copy"></i>
+                  </button>
+                  <button class="btn btn-outline-danger btn-sm" onclick="hapusKonteks('${k.id}', '${k.prodi.replace(/'/g, "\\'")}', '${k.tahunAjaran.replace(/'/g, "\\'")}')" title="Hapus Tahun Ajaran / Prodi ini">
+                    <i class="fa fa-trash"></i>
+                  </button>
+                </div>
               </div>
-              <div class="d-flex gap-2">
-                <button class="btn btn-success btn-sm" onclick="bukaKonteks('${k.id}')">
-                  Buka <i class="fa fa-arrow-right ms-1"></i>
-                </button>
-                <button class="btn btn-outline-danger btn-sm" onclick="hapusKonteks('${k.id}', '${k.prodi.replace(/'/g, "\\'")}', '${k.tahunAjaran.replace(/'/g, "\\'")}')" title="Hapus Tahun Ajaran / Prodi ini">
-                  <i class="fa fa-trash"></i>
-                </button>
+              <div id="salinPanel-${k.id}" class="d-none mt-3 p-3 bg-light rounded border">
+                <label class="form-label fw-bold small mb-1">Salin Data Master (Dosen, Mata Kuliah, Jam, Kelas, Ruangan) dari:</label>
+                <div class="d-flex gap-2 flex-wrap">
+                  <select id="salinSumber-${k.id}" class="form-select form-select-sm" style="max-width: 320px;">
+                    <option value="">-- Pilih Prodi/Tahun Ajaran sumber --</option>
+                    ${opsiSumberLain}
+                  </select>
+                  <button class="btn btn-primary btn-sm" onclick="jalankanSalinData('${k.id}')">
+                    <i class="fa fa-check me-1"></i> Salin Sekarang
+                  </button>
+                  <button class="btn btn-outline-secondary btn-sm" onclick="toggleSalinPanel('${k.id}')">Batal</button>
+                </div>
+                <small class="text-muted d-block mt-1">Jadwal TIDAK ikut disalin — hanya Data Master. Data master yang sudah ada di sini tidak dihapus (ditambahkan).</small>
               </div>
             </div>`;
         });
       });
       container.innerHTML = html;
+    }
+
+    function toggleSalinPanel(id) {
+      const panel = document.getElementById('salinPanel-' + id);
+      if (panel) panel.classList.toggle('d-none');
+    }
+
+    function jalankanSalinData(targetId) {
+      const sourceId = document.getElementById('salinSumber-' + targetId).value;
+      if (!sourceId) {
+        showAlert('Pilih dulu Prodi/Tahun Ajaran sumbernya.', 'warning');
+        return;
+      }
+
+      showLoader('Menyalin Data Master...');
+      apiCall()
+        .withSuccessHandler(res => {
+          hideLoader();
+          if (res.success) {
+            showAlert('Data Master berhasil disalin. Silakan buka Prodi ini untuk memeriksa.', 'success');
+            toggleSalinPanel(targetId);
+          } else {
+            showAlert('Gagal menyalin: ' + res.error, 'danger');
+          }
+        })
+        .withFailureHandler(err => {
+          hideLoader();
+          showAlert('Terjadi kesalahan koneksi: ' + err, 'danger');
+        })
+        .salinDataMaster(sourceId, targetId);
     }
 
     function bukaKonteks(id) {
